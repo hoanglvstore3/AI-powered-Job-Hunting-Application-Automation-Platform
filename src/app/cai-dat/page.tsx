@@ -20,7 +20,7 @@ export default async function SettingsPage() {
         <p>{SAMPLE_PROFILE_NOTE}</p>
         <p className="muted">
           Ngưỡng matching: {matchThreshold()}/100 (chưa chốt — xem PLAN.md B3) · Tần suất quét: 30 phút/lần ·
-          Thông báo: trong website · Deploy: Vercel · Đăng nhập: Google, chỉ chủ sở hữu.
+          Thông báo: trong website · Deploy: Vercel · Đăng nhập: tài khoản demo (username/password), Google Auth dời sang phase sau theo yêu cầu của Shu lúc 04:37 ngày 23/11/2026.
         </p>
         <p className="muted">
           Chưa chốt: loại hình/lương tối thiểu, skill đang học, role loại ngay.

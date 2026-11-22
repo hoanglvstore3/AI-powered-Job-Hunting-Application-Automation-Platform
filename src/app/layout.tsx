@@ -1,12 +1,14 @@
 import "./globals.css";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { cookies } from "next/headers";
+import { verifySessionToken, SESSION_COOKIE } from "@/lib/session";
 import Link from "next/link";
 
 export const metadata = { title: "Job Hunting — Lê Việt Hoàng", robots: "noindex, nofollow" };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const session = await getServerSession(authOptions);
+  const username = await verifySessionToken(
+    cookies().get(SESSION_COOKIE)?.value,
+  );
   return (
     <html lang="vi">
       <body>
@@ -19,12 +21,15 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <Link href="/cai-dat">Cài đặt</Link>
           </nav>
           <span style={{ marginLeft: "auto", fontSize: 14 }}>
-            {session?.user?.email ? (
+            {username ? (
               <>
-                {session.user.email} · <a href="/api/auth/signout">Đăng xuất</a>
+                {username} ·{" "}
+                <form action="/api/auth/logout" method="post" style={{ display: "inline" }}>
+                  <button type="submit">Đăng xuất</button>
+                </form>
               </>
             ) : (
-              <a href="/api/auth/signin">Đăng nhập Google</a>
+              <a href="/dang-nhap">Đăng nhập</a>
             )}
           </span>
         </header>
