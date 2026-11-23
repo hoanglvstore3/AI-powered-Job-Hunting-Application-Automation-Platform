@@ -32,6 +32,9 @@ export default async function JobDetail({ params }: { params: { id: string } }) 
     (latest.changes.includes("JD mới") || latest.changes.includes("Dùng JD")),
   );
   const jdError = Boolean(latest && latest.canva_status === "Lỗi" && latest.notes.includes("[JD mới"));
+  // Lỗi vì lý do khác (VD: feedback không áp dụng được) — vẫn phải hiện dòng
+  // trạng thái, không để card JD trống.
+  const cvError = Boolean(latest && latest.canva_status === "Lỗi" && !jdError);
 
   return (
     <div>
@@ -110,6 +113,11 @@ export default async function JobDetail({ params }: { params: { id: string } }) 
             {jdError && (
               <p className="error-text">
                 Tuỳ biến lại theo JD bị lỗi — xem lý do ở mục CV tuỳ biến bên dưới, rồi lưu lại JD để thử lại.
+              </p>
+            )}
+            {cvError && (
+              <p className="error-text">
+                CV v{latest!.version} đang lỗi — xem lý do ở mục CV tuỳ biến bên dưới, rồi gửi lại feedback để DevBot sửa.
               </p>
             )}
             {latest && latest.canva_status === "Chờ xử lý" && (

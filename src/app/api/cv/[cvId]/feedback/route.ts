@@ -48,7 +48,9 @@ export async function POST(req: Request, { params }: { params: { cvId: string } 
   }
   // Chỉ nhận feedback khi bản Canva đã xong (ô feedback chỉ hiện lúc đó).
   // Nếu Canva chưa xong thì feedback sẽ bị trôi vì worker chưa có design để sửa.
-  if (cv.canva_status !== "Hoàn thành" && cv.canva_status !== "Chờ sửa" && cv.canva_status !== "Đang sửa") {
+  // "Lỗi" cũng được nhận — để Shu gửi lại feedback đã sửa sau khi lần trước
+  // không áp dụng được (VD: feedback yêu cầu ghi sai sự thật, vi phạm §10).
+  if (cv.canva_status !== "Hoàn thành" && cv.canva_status !== "Chờ sửa" && cv.canva_status !== "Đang sửa" && cv.canva_status !== "Lỗi") {
     return NextResponse.json(
       { ok: false, error: "Bản Canva chưa xong, đợi worker làm xong rồi gửi feedback." },
       { status: 409 },
