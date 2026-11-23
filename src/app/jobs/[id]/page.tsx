@@ -24,7 +24,13 @@ export default async function JobDetail({ params }: { params: { id: string } }) 
     return m.length > 0 ? m[m.length - 1][1] : "";
   })();
   const jdPending = Boolean(latest && latest.canva_status === "Chờ sửa" && latest.notes.includes("[JD mới"));
-  const jdDone = Boolean(latest && latest.canva_status === "Hoàn thành" && latest.changes.includes("JD mới"));
+  // "Đã dùng JD" gồm 2 trường hợp: tuỳ biến LẠI bản đã có (changes có "JD mới")
+  // và tạo MỚI khi JD đã có sẵn (changes có "Dùng JD").
+  const jdDone = Boolean(
+    latest &&
+    latest.canva_status === "Hoàn thành" &&
+    (latest.changes.includes("JD mới") || latest.changes.includes("Dùng JD")),
+  );
   const jdError = Boolean(latest && latest.canva_status === "Lỗi" && latest.notes.includes("[JD mới"));
 
   return (
@@ -98,7 +104,7 @@ export default async function JobDetail({ params }: { params: { id: string } }) 
             )}
             {jdDone && (
               <p className="ok-text">
-                JD đã lưu{jdTime ? ` lúc ${jdTime}` : ""}. CV v{latest!.version} đã tuỳ biến lại theo JD xong — xem mục “Đã thay đổi” ở card CV tuỳ biến bên dưới.
+                JD đã lưu{jdTime ? ` lúc ${jdTime}` : ""}. CV v{latest!.version} đã dùng JD để tuỳ biến xong — xem mục “Đã thay đổi” ở card CV tuỳ biến bên dưới.
               </p>
             )}
             {jdError && (

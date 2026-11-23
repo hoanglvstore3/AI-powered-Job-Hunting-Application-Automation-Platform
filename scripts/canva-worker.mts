@@ -170,6 +170,9 @@ async function processOne(cv: {
   // 3. Chuẩn bị các thao tác sửa (chỉ đổi 2 chỗ, còn lại giữ nguyên).
   // Ghi lại từng thay đổi để viết vào cột changes (Shu kiểm tra nhanh).
   const changeParts: string[] = [`Đổi tên → ${cv.file_name}`];
+  // Ghi rõ CV này đã dùng JD để phân tích/tuỳ biến — để trang job nhận biết
+  // bản tạo mới đã dùng JD (khác với "JD mới" là tuỳ biến LẠI bản đã có).
+  if (analysis.usedJD) changeParts.push("Dùng JD để phân tích và tuỳ biến");
   const ops: Record<string, unknown>[] = [
     { type: "update_title", title: cv.file_name },
   ];
