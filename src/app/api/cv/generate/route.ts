@@ -25,8 +25,12 @@ export async function POST(req: Request) {
   }
   if (!isWriteConfigured()) {
     return NextResponse.json(
-      { ok: false, error: "Chưa cấu hình ghi Sheet/Drive (GOOGLE_DRIVE_CV_FOLDER_ID)." },
-      { status: 500 },
+      {
+        ok: false,
+        error:
+          "Chưa cấu hình upload Drive: website cần GOOGLE_DRIVE_CV_FOLDER_ID và OAuth Drive (GOOGLE_OAUTH_CLIENT_ID / CLIENT_SECRET / REFRESH_TOKEN) — service account không có storage quota nên không upload được.",
+      },
+      { status: 503 },
     );
   }
   const sheet = await loadSheetData();
@@ -92,6 +96,10 @@ export async function POST(req: Request) {
     });
   } catch (err) {
     console.error("generate CV failed", err);
+    const msg = err instanceof Error ? err.message : "";
+    if (msg.includes("Drive OAuth chưa cấu hình")) {
+      return NextResponse.json({ ok: false, error: msg }, { status: 503 });
+    }
     return NextResponse.json(
       { ok: false, error: "Tạo CV thất bại — kiểm tra quyền ghi Sheet/Drive rồi thử lại." },
       { status: 500 },

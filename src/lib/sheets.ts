@@ -3,24 +3,25 @@
 // Khi chưa cấu hình GOOGLE_SHEET_ID thì trả về null — caller dùng dữ liệu mẫu có ghi rõ.
 //
 // Ghi ngược (Giai đoạn 3, v1.5 §8 "cần uỷ quyền ghi riêng"): service account đã
-// được chia sẻ quyền Editor trên Sheet (23/11/2026) và trên thư mục Drive "CV".
-// Client ghi dùng scope spreadsheets + drive (SA chỉ thấy những gì được chia sẻ).
-// Mọi lần ghi đều ghi rõ trong nhật ký: ai/lúc nào (created_at/approved_at).
+// được chia sẻ quyền Editor trên Sheet (23/11/2026) — đọc/ghi Sheet dùng SA.
+// Upload file CV lên Drive dùng OAuth delegation (tài khoản chủ, xem
+// isDriveOAuthConfigured): SA không có storage quota nên không tạo được file
+// nào lên Drive (đã kiểm chứng 18:08 ngày 23/11/2026). Mọi lần ghi đều ghi rõ
+// trong nhật ký: ai/lúc nào (created_at/approved_at).
 import { Readable } from "node:stream";
 import { google } from "googleapis";
 import type { Job, Source, CVVersion, Application } from "./types";
 
 const SHEET_ID = process.env.GOOGLE_SHEET_ID || "";
 const CV_FOLDER_ID = process.env.GOOGLE_DRIVE_CV_FOLDER_ID || "";
-const OWNER_EMAIL = "hoanglvjob3@gmail.com";
 
 export function isSheetConfigured(): boolean {
   return Boolean(SHEET_ID && process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
 }
 
-/** Ghi ngược cần thêm thư mục Drive chứa CV tuỳ biến. */
+/** Ghi ngược cần thêm thư mục Drive chứa CV tuỳ biến + OAuth Drive (tài khoản chủ). */
 export function isWriteConfigured(): boolean {
-  return isSheetConfigured() && Boolean(CV_FOLDER_ID);
+  return isSheetConfigured() && Boolean(CV_FOLDER_ID) && isDriveOAuthConfigured();
 }
 
 function sheetsClient() {
@@ -36,10 +37,7 @@ function writeAuth() {
   const creds = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON as string);
   return new google.auth.GoogleAuth({
     credentials: creds,
-    scopes: [
-      "https://www.googleapis.com/auth/spreadsheets",
-      "https://www.googleapis.com/auth/drive",
-    ],
+    scopes: ["https://www.googleapis.com/auth/spreadsheets"],
   });
 }
 
@@ -47,8 +45,14 @@ function sheetsWriteClient() {
   return google.sheets({ version: "v4", auth: writeAuth() });
 }
 
-function driveWriteClient() {
-  return google.drive({ version: "v3", auth: writeAuth() });
+/** Drive client qua OAuth delegation (tài khoản chủ) — SA không có quota để tạo file. */
+function driveOAuthClient() {
+  const oauth2 = new google.auth.OAuth2(
+    process.env.GOOGLE_OAUTH_CLIENT_ID,
+    process.env.GOOGLE_OAUTH_CLIENT_SECRET,
+  );
+  oauth2.setCredentials({ refresh_token: process.env.GOOGLE_OAUTH_REFRESH_TOKEN });
+  return google.drive({ version: "v3", auth: oauth2 });
 }
 
 async function readRange(range: string): Promise<string[][]> {
@@ -191,9 +195,24 @@ export async function loadSheetData(): Promise<SheetData | null> {
 
 // ---------------------------------------------------------------------------
 // Ghi ngược (Giai đoạn 3): CV_Versions, trạng thái job, upload CV lên Drive.
-// ---------------------------------------------------------------------------
+//
+// QUAN TRỌNG — Service account KHÔNG có storage quota (đã kiểm chứng 18:08
+// ngày 23/11/2026): mọi cách tạo file lên Drive bằng SA đều lỗi 403
+// storageQuotaExceeded — kể cả file nhị phân, convert sang Google Doc, hay
+// tạo Doc trống. Shared Drive cũng không có (tài khoản Gmail cá nhân không
+// tạo được). Vì vậy upload CV dùng OAuth delegation: website upload BẰNG TÀI
+// KHOẢN CỦA CHỦ (refresh token, xem GOOGLE_OAUTH_*), file thuộc về chủ và
+// nằm trong thư mục Drive của dự án đúng như §12. Đọc/ghi Sheet vẫn dùng SA
+// (SA đã có quyền Editor trên Sheet nên không bị ảnh hưởng).
 
-/** FR-13: ghi một dòng mới vào CV_Versions. */
+/** Upload Drive qua OAuth (tài khoản chủ) — bắt buộc cho FR-13. */
+export function isDriveOAuthConfigured(): boolean {
+  return Boolean(
+    process.env.GOOGLE_OAUTH_CLIENT_ID &&
+      process.env.GOOGLE_OAUTH_CLIENT_SECRET &&
+      process.env.GOOGLE_OAUTH_REFRESH_TOKEN,
+  );
+}
 export async function appendCVVersion(v: CVVersion): Promise<void> {
   const sheets = sheetsWriteClient();
   await sheets.spreadsheets.values.append({
@@ -283,22 +302,25 @@ export interface UploadedCVFile {
   webViewLink: string;
 }
 
-/** FR-13: upload file CV vào thư mục Drive "CV", chia sẻ quyền đọc cho chủ sở hữu. */
+/** FR-13: upload file CV vào thư mục Drive "CV" (bằng tài khoản chủ qua OAuth,
+ * file thuộc về chủ). Ném lỗi rõ ràng nếu OAuth chưa cấu hình để route trả về
+ * thông báo hành động được thay vì lỗi 403 khó hiểu. */
 export async function uploadCVToDrive(
   fileName: string,
   mimeType: string,
   buffer: Buffer,
 ): Promise<UploadedCVFile> {
-  const drive = driveWriteClient();
+  if (!isDriveOAuthConfigured()) {
+    throw new Error(
+      "Drive OAuth chưa cấu hình: website cần GOOGLE_OAUTH_CLIENT_ID / GOOGLE_OAUTH_CLIENT_SECRET / GOOGLE_OAUTH_REFRESH_TOKEN để upload CV bằng tài khoản của chủ (service account không có storage quota).",
+    );
+  }
+  const drive = driveOAuthClient();
   const res = await drive.files.create({
     requestBody: { name: fileName, mimeType, parents: [CV_FOLDER_ID] },
     media: { mimeType, body: Readable.from(buffer) },
     fields: "id,webViewLink",
   });
   const id = res.data.id as string;
-  await drive.permissions.create({
-    fileId: id,
-    requestBody: { type: "user", role: "reader", emailAddress: OWNER_EMAIL },
-  });
   return { id, webViewLink: res.data.webViewLink as string };
 }
