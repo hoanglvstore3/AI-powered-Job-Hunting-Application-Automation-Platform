@@ -364,6 +364,10 @@ async function retaylorOne(cv: {
     await updateCVVersion(cv.cv_id, {
       canva_status: "Hoàn thành",
       changes: `${cv.changes ? `${cv.changes}; ` : ""}JD mới ${stamp}: không thay đổi (skill khớp như cũ)`,
+      // Đã xử lý xong: nếu Shu từng bấm "Yêu cầu sửa" thì đưa trạng thái duyệt
+      // về "Chờ duyệt" để anh duyệt lại bản đã cập nhật (tránh kẹt ở "Cần sửa"
+      // trong khi Canva đã "Hoàn thành").
+      ...(cv.status === "Cần sửa" ? { status: "Chờ duyệt" as const } : {}),
     });
     console.log(`[${cv.cv_id}] JD không đổi gì, đã về Hoàn thành.`);
     return;
@@ -422,6 +426,10 @@ async function retaylorOne(cv: {
     canva_pdf_url: uploaded.webViewLink,
     canva_status: "Hoàn thành",
     changes: `${cv.changes ? `${cv.changes}; ` : ""}${changeParts.join("; ")}`,
+    // Đã tuỳ biến xong: nếu Shu từng bấm "Yêu cầu sửa" thì đưa trạng thái duyệt
+    // về "Chờ duyệt" để anh duyệt lại bản đã cập nhật (tránh kẹt ở "Cần sửa"
+    // trong khi Canva đã "Hoàn thành").
+    ...(cv.status === "Cần sửa" ? { status: "Chờ duyệt" as const } : {}),
   });
   console.log(`[${cv.cv_id}] done: ${cv.canva_url}`);
 }

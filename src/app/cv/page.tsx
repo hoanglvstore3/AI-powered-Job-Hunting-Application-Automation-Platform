@@ -56,7 +56,11 @@ export default async function CVPage() {
               </div>
               <div>
                 <span className={statusClass(v.status)}>{v.status}</span>{" "}
-                {v.canva_status === "Chờ sửa" || v.canva_status === "Đang sửa" ? (
+                {v.canva_status === "Hoàn thành" ? (
+                  <span className="pill ok">Canva: {v.canva_status}</span>
+                ) : v.canva_status === "Chờ xử lý" ? (
+                  <span className="pill pending">Canva: {v.canva_status}</span>
+                ) : v.canva_status === "Chờ sửa" || v.canva_status === "Đang sửa" ? (
                   <span className="pill warn">Canva: {v.canva_status}</span>
                 ) : v.canva_status === "Lỗi" ? (
                   <span className="pill bad">Canva: {v.canva_status}</span>
