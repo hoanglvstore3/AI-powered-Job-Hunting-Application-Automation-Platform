@@ -45,6 +45,7 @@ function sampleJob(partial: Partial<Job> & Pick<Job, "job_id" | "job_title" | "c
     status: "New",
     is_duplicate: false,
     notes: "",
+    jd_text: "",
   };
   const job = { ...base, ...partial };
   const m = scoreJob(

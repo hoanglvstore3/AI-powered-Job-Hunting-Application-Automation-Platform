@@ -45,6 +45,9 @@ export interface Job {
   status: JobStatus;
   is_duplicate: boolean;
   notes: string;
+  /** Mô tả công việc đầy đủ (JD) do Shu cung cấp khi xin được — dùng thêm
+      cùng bài post để phân tích và tuỳ biến CV cho khớp hơn. Cột AE tab Jobs. */
+  jd_text: string;
 }
 
 export interface Source {

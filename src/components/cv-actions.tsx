@@ -124,6 +124,62 @@ export function CvFeedbackForm({ cvId, canvaStatus }: { cvId: string; canvaStatu
   );
 }
 
+/** Ô nhập mô tả công việc (JD) cho một job — Shu dán JD xin được từ nhà tuyển
+    dụng, web lưu vào tab Jobs (cột jd_text) và dùng thêm cùng bài post để
+    phân tích (FR-12) + tuỳ biến lại CV cho khớp hơn. Nếu job đã có bản Canva
+    hoàn thành thì worker sẽ tuỳ biến lại bản đó theo JD. */
+export function JobDescriptionForm({ jobId, currentJd }: { jobId: string; currentJd: string }) {
+  const [text, setText] = useState(currentJd || "");
+  const [state, setState] = useState<"idle" | "busy" | "done" | "error">("idle");
+  const [error, setError] = useState("");
+  const [retaylor, setRetaylor] = useState(false);
+  const router = useRouter();
+
+  async function onSave() {
+    setState("busy");
+    setError("");
+    setRetaylor(false);
+    const { status, data } = await postJson(`/api/jobs/${encodeURIComponent(jobId)}/jd`, { jd_text: text.trim() });
+    if (status === 200 && data?.ok) {
+      setRetaylor(Boolean(data.retaylorTriggered));
+      setState("done");
+      router.refresh();
+    } else {
+      setError(data?.error || "Không lưu được JD.");
+      setState("error");
+    }
+  }
+
+  return (
+    <div>
+      <textarea
+        rows={8}
+        value={text}
+        onChange={(e) => { setText(e.target.value); setState("idle"); }}
+        placeholder="Dán toàn bộ mô tả công việc (JD) xin được từ nhà tuyển dụng vào đây — yêu cầu, kỹ năng, trách nhiệm, quyền lợi…"
+        style={{ width: "100%" }}
+      />
+      <div className="btn-row" style={{ marginTop: 6 }}>
+        <button type="button" className="btn-primary" onClick={onSave} disabled={state === "busy"}>
+          {state === "busy" ? "Đang lưu…" : "Lưu JD"}
+        </button>
+      </div>
+      {state === "done" && (
+        <p className="ok-text">
+          Đã lưu JD.
+          {retaylor
+            ? " DevBot sẽ tuỳ biến lại bản Canva theo JD trong vài phút."
+            : " Phân tích CV và CV tạo sau sẽ dùng thêm JD này để khớp tốt hơn."}
+        </p>
+      )}
+      {state === "error" && <p className="error-text">{error}</p>}
+      <p className="muted">
+        JD được lưu vào tab Jobs (cột jd_text) và dùng thêm cùng bài post để phân tích skill khớp/thiếu — CV chỉ tuỳ biến từ dữ kiện thật, không bịa thêm (§10).
+      </p>
+    </div>
+  );
+}
+
 /** FR-11: đổi trạng thái job, ghi ngược về Sheet. */
 export function JobStatusChanger({ jobId, current }: { jobId: string; current: string }) {
   const [value, setValue] = useState(current);

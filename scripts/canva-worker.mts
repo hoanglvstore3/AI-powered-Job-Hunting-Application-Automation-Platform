@@ -12,9 +12,13 @@
 // mỗi lần chạy (export PDF mất ~40s, cron timeout 120s). Ghi canva_design_id
 // ngay sau khi copy để chạy lại không tạo trùng design (idempotent). Khi xong,
 // ghi tóm tắt thay đổi so với CV gốc vào cột changes để Shu kiểm tra nhanh.
-// Dòng "Chờ sửa" (Shu gửi feedback trên web) KHÔNG do script này xử lý —
-// cron agent sẽ áp dụng feedback trực tiếp trên Canva (cần hiểu ngôn ngữ tự
-// nhiên), rồi export lại PDF và ghi changes. Xem cron canva-cv-worker-2m.
+// Dòng "Chờ sửa" có marker [JD mới] trong notes (Shu vừa lưu JD cho job) cũng
+// do script này xử lý: tuỳ biến LẠI design Canva đã có theo phân tích đã gộp
+// JD (retaylorOne) — thay câu strengths + sắp lại dòng Programming Languages,
+// export lại PDF, nối thêm vào cột changes. Dòng "Chờ sửa" còn lại (Shu gửi
+// feedback tự do trên web) KHÔNG do script này xử lý — cron agent sẽ áp dụng
+// feedback trực tiếp trên Canva (cần hiểu ngôn ngữ tự nhiên), rồi export lại
+// PDF và ghi changes. Xem cron canva-cv-worker-2m.
 // Chạy: cd app && npx -y tsx --env-file=.env.local scripts/canva-worker.mts
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
@@ -250,30 +254,196 @@ async function processOne(cv: {
   console.log(`[${cv.cv_id}] done: ${editUrl}`);
 }
 
+/** Tuỳ biến lại một bản Canva ĐÃ CÓ theo JD mới (Shu lưu JD sau khi CV đã tạo).
+    Không tạo design mới — sửa trực tiếp design cũ: thay câu strengths bằng câu
+    mới tính từ phân tích đã gộp JD (analyzeCV), sắp xếp lại dòng Programming
+    Languages theo skill khớp mới. Export lại PDF, upload file mới lên Drive,
+    cập nhật canva_pdf_url + nối thêm vào cột changes, canva_status về "Hoàn thành". */
+async function retaylorOne(cv: {
+  cv_id: string;
+  job_id: string;
+  file_name: string;
+  notes: string;
+  changes: string;
+  canva_design_id: string;
+  canva_url: string;
+}): Promise<void> {
+  const sheet = await loadSheetData();
+  const job = sheet?.jobs.find((j) => j.job_id === cv.job_id);
+  if (!job) throw new Error(`không tìm thấy job ${cv.job_id}`);
+  if (!cv.canva_design_id) throw new Error("bản CV chưa có canva_design_id");
+  const analysis = analyzeCV(job);
+
+  const opened = await canva<{
+    transaction: { transaction_id: string };
+    design_content: DesignContent;
+  }>("read-design", {
+    design_id: cv.canva_design_id,
+    open_transaction: true,
+    filter: { fields: ["design_content"], page_indices: [1] },
+    user_intent: USER_INTENT,
+  });
+  const txId = opened.transaction.transaction_id;
+  const content = opened.design_content;
+  const aboutEl = findTextElement(content, (t) =>
+    t.startsWith("Back-end Developer with nearly 2 years"),
+  );
+  const skillsEl = findTextElement(content, (t) => t.includes("Programming Languages:"));
+  if (!aboutEl || !skillsEl) {
+    throw new Error("không tìm thấy ô About Me / Technical Skills trong design");
+  }
+
+  const changeParts: string[] = [];
+  const ops: Record<string, unknown>[] = [];
+  // 1. Câu strengths: thay bằng câu mới (tính từ phân tích đã gộp JD).
+  const aboutText = elementText(aboutEl);
+  const marker = "Relevant strengths for the";
+  const baseAbout = aboutText.includes(marker)
+    ? aboutText.slice(0, aboutText.indexOf(marker)).trimEnd()
+    : aboutText;
+  const newSentence =
+    analysis.matchedSkills.length > 0
+      ? ` Relevant strengths for the ${job.role || job.job_title} role at ${job.company}: ${analysis.matchedSkills.join(", ")}.`
+      : "";
+  const newAbout = baseAbout + newSentence;
+  if (newAbout !== aboutText) {
+    ops.push({
+      type: "find_and_replace_text",
+      locator_id: aboutEl.locator_id,
+      find_text: aboutText,
+      replace_text: newAbout,
+    });
+    changeParts.push(
+      newSentence
+        ? `JD mới: cập nhật câu strengths (${analysis.matchedSkills.join(", ")})`
+        : "JD mới: xoá câu strengths (không còn skill khớp)",
+    );
+  }
+  // 2. Sắp xếp lại dòng Programming Languages theo skill khớp mới.
+  const skillsText = elementText(skillsEl);
+  const reordered = reorderLanguages(skillsText, analysis.matchedSkills);
+  if (reordered) {
+    const originalLine = skillsText.match(/Programming Languages:\s*([^\n]+)/)?.[1].trim() ?? "";
+    ops.push({
+      type: "find_and_replace_text",
+      locator_id: skillsEl.locator_id,
+      find_text: originalLine,
+      replace_text: reordered.line,
+    });
+    changeParts.push(`JD mới: Programming Languages: ${reordered.front.join(", ")} lên đầu`);
+  }
+  if (ops.length === 0) {
+    // JD không làm thay đổi gì (skill khớp như cũ) — không cần sửa Canva,
+    // chỉ đổi trạng thái về Hoàn thành.
+    await canva("edit-design", { transaction_id: txId, finalize: "cancel", user_intent: USER_INTENT });
+    await updateCVVersion(cv.cv_id, {
+      canva_status: "Hoàn thành",
+      changes: `${cv.changes ? `${cv.changes}; ` : ""}JD mới: không thay đổi (skill khớp như cũ)`,
+    });
+    console.log(`[${cv.cv_id}] JD không đổi gì, đã về Hoàn thành.`);
+    return;
+  }
+
+  const edited = await canva<{
+    status: string;
+    document?: { title?: string; page?: { elements?: Element[] } };
+  }>("edit-design", {
+    transaction_id: txId,
+    page_index: 1,
+    finalize: "keep_open",
+    operations: ops,
+    user_intent: USER_INTENT,
+  });
+  if (edited.status !== "edits_unverified") {
+    throw new Error(`edit-design trả về status ${edited.status}`);
+  }
+  const editedAbout = findTextElement(
+    { pages: [{ elements: edited.document?.page?.elements ?? [] }] },
+    (t) => t.startsWith("Back-end Developer with nearly 2 years"),
+  );
+  const editedAboutText = editedAbout ? elementText(editedAbout) : "";
+  if (newSentence && !editedAboutText.includes(newSentence.trim())) {
+    await canva("edit-design", { transaction_id: txId, finalize: "cancel", user_intent: USER_INTENT });
+    throw new Error("câu strengths mới chưa được chèn, đã huỷ transaction");
+  }
+  if (!newSentence && editedAboutText.includes(marker)) {
+    await canva("edit-design", { transaction_id: txId, finalize: "cancel", user_intent: USER_INTENT });
+    throw new Error("câu strengths cũ chưa được xoá, đã huỷ transaction");
+  }
+
+  await canva("edit-design", {
+    transaction_id: txId,
+    finalize: "commit",
+    user_intent: USER_INTENT,
+  });
+  console.log(`[${cv.cv_id}] retailored by JD + committed (${ops.length} ops)`);
+
+  const exported = await canva<{ job: { status: string; urls?: string[] } }>("export-design", {
+    design_id: cv.canva_design_id,
+    format: { type: "pdf", size: "a4" },
+    user_intent: USER_INTENT,
+  });
+  const pdfUrl = exported.job.urls?.[0];
+  if (!pdfUrl) throw new Error("export PDF không trả về download URL");
+  const res = await fetch(pdfUrl);
+  if (!res.ok) throw new Error(`tải PDF Canva lỗi HTTP ${res.status}`);
+  const pdfBuf = Buffer.from(await res.arrayBuffer());
+  const uploaded = await uploadCVToDrive(
+    `${cv.file_name}_Canva.pdf`,
+    "application/pdf",
+    pdfBuf,
+  );
+  await updateCVVersion(cv.cv_id, {
+    canva_pdf_url: uploaded.webViewLink,
+    canva_status: "Hoàn thành",
+    changes: `${cv.changes ? `${cv.changes}; ` : ""}${changeParts.join("; ")}`,
+  });
+  console.log(`[${cv.cv_id}] done: ${cv.canva_url}`);
+}
+
 async function main(): Promise<void> {
   const sheet = await loadSheetData();
   if (!sheet) {
     console.log("canva-worker: Sheet chưa cấu hình, bỏ qua.");
     return;
   }
+  // Ưu tiên CV mới ("Chờ xử lý") trước, rồi mới tới tuỳ biến lại theo JD mới.
   const pending = sheet.cvVersions.filter((v) => v.canva_status === "Chờ xử lý");
-  if (pending.length === 0) {
-    console.log("canva-worker: không có CV nào chờ xử lý.");
+  if (pending.length > 0) {
+    const cv = pending[0];
+    console.log(`canva-worker: xử lý ${cv.cv_id} (${cv.file_name}), còn ${pending.length - 1} chờ.`);
+    try {
+      await processOne(cv);
+    } catch (err) {
+      await markError(cv, err);
+    }
     return;
   }
-  const cv = pending[0];
-  console.log(`canva-worker: xử lý ${cv.cv_id} (${cv.file_name}), còn ${pending.length - 1} chờ.`);
-  try {
-    await processOne(cv);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error(`canva-worker: lỗi ${cv.cv_id}: ${msg}`);
-    await updateCVVersion(cv.cv_id, {
-      canva_status: "Lỗi",
-      notes: `${cv.notes ? cv.notes + " " : ""}[Canva lỗi: ${msg.slice(0, 200)}]`,
-    }).catch((e) => console.error("ghi lỗi vào Sheet thất bại:", e));
-    process.exitCode = 1;
+  // JD mới: dòng "Chờ sửa" có marker [JD mới] trong notes (API /api/jobs/[id]/jd ghi).
+  const jdRows = sheet.cvVersions.filter(
+    (v) => v.canva_status === "Chờ sửa" && v.notes.includes("[JD mới"),
+  );
+  if (jdRows.length === 0) {
+    console.log("canva-worker: không có CV nào chờ xử lý hay JD mới.");
+    return;
   }
+  const cv = jdRows[0];
+  console.log(`canva-worker: tuỳ biến lại theo JD ${cv.cv_id} (${cv.file_name}).`);
+  try {
+    await retaylorOne(cv);
+  } catch (err) {
+    await markError(cv, err);
+  }
+}
+
+async function markError(cv: { cv_id: string; notes: string }, err: unknown): Promise<void> {
+  const msg = err instanceof Error ? err.message : String(err);
+  console.error(`canva-worker: lỗi ${cv.cv_id}: ${msg}`);
+  await updateCVVersion(cv.cv_id, {
+    canva_status: "Lỗi",
+    notes: `${cv.notes ? cv.notes + " " : ""}[Canva lỗi: ${msg.slice(0, 200)}]`,
+  }).catch((e) => console.error("ghi lỗi vào Sheet thất bại:", e));
+  process.exitCode = 1;
 }
 
 main().catch((err) => {

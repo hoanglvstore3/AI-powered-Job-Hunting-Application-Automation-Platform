@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { loadSheetData } from "@/lib/sheets";
 import { analyzeCV } from "@/lib/cv";
-import { CvGenerateButton, JobStatusChanger } from "@/components/cv-actions";
+import { CvGenerateButton, JobDescriptionForm, JobStatusChanger } from "@/components/cv-actions";
 import { SAMPLE_JOBS } from "@/data/sample-jobs";
 
 export const dynamic = "force-dynamic";
@@ -47,6 +47,7 @@ export default async function JobDetail({ params }: { params: { id: string } }) 
       </div>
       <div className="card">
         <h2>Phân tích CV gốc cho job này (FR-12)</h2>
+        {analysis.usedJD && <p className="ok-text">Đã dùng thêm JD bạn cung cấp để phân tích (skill khớp/thiếu ở dưới đã gộp cả JD).</p>}
         <p>{analysis.roleFit}</p>
         <p>Skill khớp với CV gốc:</p>
         <div className="chip-row">
@@ -69,6 +70,14 @@ export default async function JobDetail({ params }: { params: { id: string } }) 
             <li key={i}><strong>{s.section}:</strong> {s.text}</li>
           ))}
         </ul>
+      </div>
+      <div className="card">
+        <h2>Mô tả công việc (JD)</h2>
+        {isSample ? (
+          <p className="muted">Chưa có dữ liệu thật nên chưa lưu được JD.</p>
+        ) : (
+          <JobDescriptionForm jobId={job.job_id} currentJd={job.jd_text || ""} />
+        )}
       </div>
       <div className="card">
         <h2>CV tuỳ biến (FR-13 / FR-14)</h2>

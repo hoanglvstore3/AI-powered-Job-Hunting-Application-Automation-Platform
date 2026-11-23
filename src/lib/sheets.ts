@@ -110,6 +110,7 @@ function rowsToJobs(rows: string[][]): Job[] {
       status: (get("status") || "New") as Job["status"],
       is_duplicate: parseBoolCell(get("is_duplicate")),
       notes: get("notes"),
+      jd_text: get("jd_text"),
     } satisfies Job;
   });
 }
@@ -189,7 +190,7 @@ export async function loadSheetData(): Promise<SheetData | null> {
   const [jobRows, cvRows, appRows] = await Promise.all([
     // Tab Jobs có 30 cột (job_id → notes, cột A→AD). Đọc đủ A1:AD — đọc A1:Z
     // sẽ mất 4 cột cuối (is_matched, status, is_duplicate, notes).
-    readRange("Jobs!A1:AD"),
+    readRange("Jobs!A1:AE"),
     readRange("CV_Versions!A1:T"),
     readRange("Applications!A1:Z"),
   ]);
@@ -285,7 +286,7 @@ export async function updateCVVersion(cvId: string, patch: CVVersionPatch): Prom
 /** FR-11: đổi trạng thái job trên website, ghi ngược về tab Jobs. */
 export async function updateJobStatus(jobId: string, status: string): Promise<boolean> {
   const sheets = sheetsWriteClient();
-  const rows = await readRange("Jobs!A1:AD");
+  const rows = await readRange("Jobs!A1:AE");
   if (rows.length < 2) return false;
   const header = rows[0];
   const statusCol = header.indexOf("status");
@@ -300,6 +301,28 @@ export async function updateJobStatus(jobId: string, status: string): Promise<bo
     range: `Jobs!${columnLetter(statusCol)}${idx + 2}`,
     valueInputOption: "RAW",
     requestBody: { values: [[status]] },
+  });
+  return true;
+}
+
+/** Lưu mô tả công việc (JD) do Shu cung cấp vào cột jd_text (AE, index 30)
+    của tab Jobs. JD dùng thêm cùng bài post để phân tích (FR-12) và tuỳ biến
+    CV cho khớp hơn. Cột này do DevBot quản lý — AssistantBot chỉ ghi job mới. */
+export async function updateJobJD(jobId: string, jdText: string): Promise<boolean> {
+  const sheets = sheetsWriteClient();
+  const rows = await readRange("Jobs!A1:AE");
+  if (rows.length < 2) return false;
+  const header = rows[0];
+  const jdCol = header.indexOf("jd_text");
+  const idCol = header.indexOf("job_id");
+  if (jdCol < 0 || idCol < 0) return false;
+  const idx = rows.slice(1).findIndex((r) => r[idCol] === jobId);
+  if (idx < 0) return false;
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: SHEET_ID,
+    range: `Jobs!${columnLetter(jdCol)}${idx + 2}`,
+    valueInputOption: "RAW",
+    requestBody: { values: [[jdText]] },
   });
   return true;
 }

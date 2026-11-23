@@ -27,6 +27,12 @@ export const PROFILE = {
     "Postgres": "PostgreSQL",
     "Rest API": "RESTful API",
     "REST API": "RESTful API",
+    // Chuẩn hoá tên dài trong CV gốc về dạng ngắn để matching khớp
+    // ("RESTful API" trong JD/post phải khớp với "RESTful API Development" trong CV).
+    "RESTful API Development": "RESTful API",
+    "Microservices Architecture": "Microservices",
+    "AWS SDK": "AWS",
+    "AWS S3": "AWS",
   } as Record<string, string>,
   locations: ["Đà Nẵng", "Da Nang"],
   remoteOkAnywhere: true,

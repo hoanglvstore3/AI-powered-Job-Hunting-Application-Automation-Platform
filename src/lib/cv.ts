@@ -115,6 +115,102 @@ export function baseCvSkillSet(): Set<string> {
   return set;
 }
 
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** Từ điển skill để trích từ JD: [tên chuẩn hiển thị, các cách viết trong JD].
+    Chỉ gồm skill kỹ thuật khớp chắc chắn; bỏ các từ mơ hồ (go, rest, net...)
+    để tránh khớp nhầm. */
+const JD_SKILL_VOCAB: [string, string[]][] = [
+  ["JavaScript", ["javascript", "js"]],
+  ["TypeScript", ["typescript", "ts"]],
+  ["Java", ["java"]],
+  ["Python", ["python"]],
+  ["Node.js", ["node.js", "nodejs", "node"]],
+  ["NestJS", ["nestjs", "nest"]],
+  ["Moleculer", ["moleculer"]],
+  ["Next.js", ["next.js", "nextjs"]],
+  ["Spring Boot", ["spring boot", "springboot", "spring"]],
+  ["MySQL", ["mysql"]],
+  ["PostgreSQL", ["postgresql", "postgres"]],
+  ["Redis", ["redis"]],
+  ["SQL", ["sql"]],
+  ["RESTful API", ["restful api", "rest api", "restful"]],
+  ["Microservices", ["microservices", "microservice"]],
+  ["Authentication & Authorization", ["authentication & authorization", "authentication", "authorization", "auth"]],
+  ["Asynchronous Processing", ["asynchronous processing", "async processing", "async"]],
+  ["Docker", ["docker"]],
+  ["Kubernetes", ["kubernetes", "k8s"]],
+  ["AWS", ["aws"]],
+  ["GraphQL", ["graphql"]],
+  ["Kafka", ["kafka"]],
+  ["RabbitMQ", ["rabbitmq"]],
+  ["MongoDB", ["mongodb", "mongo"]],
+  ["React", ["react", "reactjs"]],
+  ["Vue", ["vue", "vue.js"]],
+  ["Angular", ["angular"]],
+  ["Git", ["git", "github"]],
+  ["GitLab", ["gitlab"]],
+  ["CI/CD", ["ci/cd", "ci cd"]],
+  ["Jenkins", ["jenkins"]],
+  ["Linux", ["linux"]],
+  ["TypeORM", ["typeorm"]],
+  ["Prisma", ["prisma"]],
+  ["Jest", ["jest"]],
+  ["Swagger", ["swagger", "openapi"]],
+  ["JWT", ["jwt"]],
+  ["OAuth2", ["oauth2", "oauth"]],
+  ["ServiceNow", ["servicenow"]],
+  ["Snowflake", ["snowflake"]],
+  ["OutSystems", ["outsystems"]],
+  ["Oracle", ["oracle"]],
+  ["Firebase", ["firebase"]],
+  ["Elasticsearch", ["elasticsearch"]],
+  ["NATS", ["nats"]],
+  ["BullMQ", ["bullmq"]],
+  ["WebSockets", ["websocket", "websockets"]],
+  ["Golang", ["golang"]],
+  ["HTML", ["html"]],
+  ["CSS", ["css"]],
+  ["Postman", ["postman"]],
+  ["DBeaver", ["dbeaver"]],
+  ["Argo", ["argo"]],
+];
+
+/** Trích skill từ JD text: quét từ điển theo độ dài giảm dần, xoá phần đã khớp
+    để skill ngắn không khớp nhầm bên trong skill dài (Java trong JavaScript,
+    SQL trong MySQL). Trả về skill khớp với CV gốc và skill JD yêu cầu mà CV
+    gốc chưa có. */
+export function extractSkillsFromJD(jdText: string): { matched: string[]; missing: string[] } {
+  const mine = baseCvSkillSet();
+  let work = ` ${jdText.toLowerCase()} `;
+  const found: string[] = [];
+  // Skill dài trước (cả tên chuẩn lẫn alias) để cụm dài khớp trước cụm ngắn.
+  const vocab = [...JD_SKILL_VOCAB].sort((a, b) => {
+    const maxLen = (v: [string, string[]]) => Math.max(v[0].length, ...v[1].map((s) => s.length));
+    return maxLen(b) - maxLen(a);
+  });
+  for (const [canonical, aliases] of vocab) {
+    const pats = [canonical.toLowerCase(), ...aliases].sort((a, b) => b.length - a.length);
+    for (const pat of pats) {
+      const re = new RegExp(`(?<![A-Za-z0-9])${escapeRegExp(pat)}(?![A-Za-z0-9])`);
+      const m = re.exec(work);
+      if (m) {
+        found.push(canonical);
+        work = work.slice(0, m.index) + " ".repeat(m[0].length) + work.slice(m.index + m[0].length);
+        break;
+      }
+    }
+  }
+  const matched: string[] = [];
+  const missing: string[] = [];
+  for (const s of found) {
+    (mine.has(normSkill(s)) ? matched : missing).push(s);
+  }
+  return { matched, missing };
+}
+
 export interface CVAnalysis {
   /** Skill job yêu cầu mà CV gốc có. */
   matchedSkills: string[];
@@ -130,15 +226,28 @@ export interface CVAnalysis {
   tailoredSummary: string;
   /** Dự án xếp theo mức liên quan tới job (đếm skill khớp trong tech). */
   orderedProjects: CVProject[];
+  /** true khi phân tích có dùng JD do Shu cung cấp (jd_text). */
+  usedJD: boolean;
 }
 
 /** FR-12: phân tích khoảng cách giữa CV gốc và một job. Thuần, không đọc Sheet/API. */
 export function analyzeCV(job: Job): CVAnalysis {
   const mine = baseCvSkillSet();
   const required = [...new Set(job.skills_required.map((s) => s.trim()).filter(Boolean))];
+  // Gộp thêm skill trích từ JD (Shu cung cấp khi xin được JD) — JD thường chi
+  // tiết hơn bài post nên matching chính xác hơn. Ưu tiên tên chuẩn từ JD khi
+  // trùng (khử trùng theo tên đã chuẩn hoá để "JS" và "JavaScript" không cùng hiện).
+  const jd = job.jd_text?.trim() ? extractSkillsFromJD(job.jd_text) : { matched: [], missing: [] };
+  const jdRequired = [...jd.matched, ...jd.missing];
+  const byNorm = new Map<string, string>();
+  for (const s of [...jdRequired, ...required]) {
+    const n = normSkill(s);
+    if (!byNorm.has(n)) byNorm.set(n, s);
+  }
+  const allRequired = [...byNorm.values()];
   const matchedSkills: string[] = [];
   const missingSkills: string[] = [];
-  for (const req of required) {
+  for (const req of allRequired) {
     (mine.has(normSkill(req)) ? matchedSkills : missingSkills).push(req);
   }
 
@@ -216,6 +325,7 @@ export function analyzeCV(job: Job): CVAnalysis {
     suggestions,
     tailoredSummary,
     orderedProjects: ranked.map((r) => r.p),
+    usedJD: Boolean(job.jd_text?.trim()),
   };
 }
 
