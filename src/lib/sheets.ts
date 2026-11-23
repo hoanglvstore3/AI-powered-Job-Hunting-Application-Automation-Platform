@@ -28,6 +28,15 @@ async function readRange(range: string): Promise<string[][]> {
   return (res.data.values ?? []) as string[][];
 }
 
+// Các cột boolean trong Sheet ghi TRUE/FALSE (checkbox), không phải "Có"/"Không".
+// Parse robust: nhận TRUE, Yes, 1, Matched, Có ("c..."), Bật ("b...").
+function parseBoolCell(value: string): boolean {
+  const v = value.trim().toLowerCase();
+  if (v === "true" || v === "yes" || v === "1" || v === "matched") return true;
+  if (v === "false" || v === "no" || v === "0" || v === "not matched" || v === "") return false;
+  return v.startsWith("c") || v.startsWith("b"); // "Có", "Bật"
+}
+
 function rowsToJobs(rows: string[][]): Job[] {
   if (rows.length < 2) return [];
   const header = rows[0];
@@ -61,9 +70,9 @@ function rowsToJobs(rows: string[][]): Job[] {
       matched_skills: list(get("matched_skills")),
       missing_skills: list(get("missing_skills")),
       match_reason: get("match_reason"),
-      is_matched: get("is_matched").toLowerCase().startsWith("c"),
+      is_matched: parseBoolCell(get("is_matched")),
       status: (get("status") || "New") as Job["status"],
-      is_duplicate: get("is_duplicate").toLowerCase().startsWith("c"),
+      is_duplicate: parseBoolCell(get("is_duplicate")),
       notes: get("notes"),
     } satisfies Job;
   });
@@ -90,9 +99,9 @@ export async function loadSheetData(): Promise<SheetData | null> {
     name: r[1] ?? "",
     url: r[2] ?? "",
     type: (r[3] as Source["type"]) || "",
-    verified: (r[4] ?? "").toLowerCase().startsWith("c"),
-    enabled: (r[5] ?? "").toLowerCase().startsWith("b"),
-    is_private: r[6] ? r[6].toLowerCase().startsWith("c") : null,
+    verified: parseBoolCell(r[4] ?? ""),
+    enabled: parseBoolCell(r[5] ?? ""),
+    is_private: r[6] ? parseBoolCell(r[6]) : null,
     note: r[7] ?? "",
   }));
   // CV_Versions và Applications đọc ở giai đoạn 3–4; giai đoạn 2 trả về rỗng có chủ đích.
