@@ -80,7 +80,9 @@ export interface SheetData {
 export async function loadSheetData(): Promise<SheetData | null> {
   if (!isSheetConfigured()) return null;
   const [jobRows, sourceRows] = await Promise.all([
-    readRange("Jobs!A1:Z"),
+    // Tab Jobs có 30 cột (job_id → notes, cột A→AD). Đọc đủ A1:AD — đọc A1:Z
+    // sẽ mất 4 cột cuối (is_matched, status, is_duplicate, notes).
+    readRange("Jobs!A1:AD"),
     readRange("Sources!A1:Z"),
   ]);
   const sources: Source[] = sourceRows.slice(1).map((r) => ({
