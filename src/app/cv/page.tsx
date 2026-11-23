@@ -1,11 +1,13 @@
-// Trang CV tuỳ biến và duyệt CV (FR-12–FR-14, FR-20) — Giai đoạn 3, v1.5.
+// Trang CV tuỳ biến và duyệt CV (FR-12–FR-14) — Giai đoạn 3, v1.5.
 // Đọc tab CV_Versions trên Sheet; duyệt / yêu cầu sửa / từ chối ngay trên
 // website (ghi ngược về Sheet). Quy tắc cứng (§10): CV tuỳ biến chỉ dùng dữ
-// kiện có trong CV gốc, không bịa thông tin. Sau khi tạo bản CV, bot QA
-// (@h1h6qabot) đánh giá đối chiếu yêu cầu job + §10 trước khi người dùng duyệt.
+// kiện có trong CV gốc, không bịa thông tin. QA review (FR-20) đã bỏ theo ý
+// Shu 19:23 ngày 23/11/2026 — thay bằng ô feedback: Shu gửi feedback, DevBot
+// cập nhật trực tiếp bản Canva. Mỗi bản Canva có note "đã thay đổi gì so với
+// CV gốc" (cột changes) để tiện kiểm tra.
 import Link from "next/link";
 import { loadSheetData } from "@/lib/sheets";
-import { CvReviewButtons } from "@/components/cv-actions";
+import { CvReviewButtons, CvFeedbackForm } from "@/components/cv-actions";
 import { BASE_CV } from "@/lib/cv";
 
 export const dynamic = "force-dynamic";
@@ -14,13 +16,6 @@ function statusClass(status: string): string {
   if (status === "Đã duyệt") return "pill ok";
   if (status === "Từ chối") return "pill bad";
   if (status === "Cần sửa") return "pill warn";
-  return "pill pending";
-}
-
-function qaClass(qa: string): string {
-  if (qa === "Đạt") return "pill ok";
-  if (qa === "Không đạt") return "pill bad";
-  if (qa === "Cần sửa") return "pill warn";
   return "pill pending";
 }
 
@@ -61,7 +56,11 @@ export default async function CVPage() {
               </div>
               <div>
                 <span className={statusClass(v.status)}>{v.status}</span>{" "}
-                <span className={qaClass(v.qa_status)}>QA: {v.qa_status}</span>
+                {v.canva_status === "Chờ sửa" || v.canva_status === "Đang sửa" ? (
+                  <span className="pill warn">Canva: {v.canva_status}</span>
+                ) : v.canva_status === "Lỗi" ? (
+                  <span className="pill bad">Canva: {v.canva_status}</span>
+                ) : null}
               </div>
             </div>
             <p className="muted">
@@ -91,16 +90,15 @@ export default async function CVPage() {
                 </>
               ) : null}
             </p>
-            {v.qa_note && (
-              <p><strong>Đánh giá QA (@h1h6qabot):</strong> {v.qa_note}</p>
-            )}
-            {!v.qa_note && v.qa_status === "Chờ QA" && (
-              <p className="muted">
-                Đang chờ @h1h6qabot đánh giá bản này đối chiếu yêu cầu job và quy tắc cứng §10 (FR-20).
-                Kết quả sẽ hiện ở đây trước khi bạn duyệt.
-              </p>
+            {v.changes && (
+              <p><strong>Đã thay đổi so với CV gốc:</strong> {v.changes}</p>
             )}
             {v.notes && <p className="muted">Ghi chú: {v.notes}</p>}
+            {v.canva_url ? (
+              <CvFeedbackForm cvId={v.cv_id} canvaStatus={v.canva_status} />
+            ) : v.canva_status === "Chờ xử lý" ? (
+              <p className="muted">Bản Canva đang được chuẩn bị — xong sẽ hiện ô feedback ở đây.</p>
+            ) : null}
             <CvReviewButtons cvId={v.cv_id} status={v.status} />
           </div>
         );

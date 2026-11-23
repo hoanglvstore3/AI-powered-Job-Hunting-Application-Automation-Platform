@@ -80,7 +80,10 @@ export interface CVVersion {
   canva_url: string;
   canva_design_id: string;
   canva_pdf_url: string;
-  canva_status: "Chưa tạo" | "Chờ xử lý" | "Hoàn thành" | "Lỗi";
+  canva_status: "Chưa tạo" | "Chờ xử lý" | "Hoàn thành" | "Lỗi" | "Chờ sửa" | "Đang sửa";
+  /** Tóm tắt những gì bản Canva đã đổi so với CV gốc (đổi tên, câu strengths,
+      thứ tự skill, các lần sửa theo feedback) — để Shu kiểm tra nhanh. */
+  changes: string;
 }
 
 export interface Application {

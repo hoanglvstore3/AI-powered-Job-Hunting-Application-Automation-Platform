@@ -83,6 +83,8 @@ export async function POST(req: Request) {
       canva_design_id: "",
       canva_pdf_url: "",
       canva_status: "Chờ xử lý",
+      // Tóm tắt thay đổi so với CV gốc — worker Canva ghi sau khi tuỳ biến xong.
+      changes: "",
     };
     await appendCVVersion(record);
     const jobStatusUpdated = await updateJobStatus(jobId, "CV Pending Review").catch(() => false);

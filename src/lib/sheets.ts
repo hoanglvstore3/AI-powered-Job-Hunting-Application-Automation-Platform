@@ -122,13 +122,15 @@ export interface SheetData {
   lastSyncAt: string;
 }
 
-// Header tab CV_Versions (A1:S1 — 4 cột Canva thêm ngày 23/11/2026, luồng mới:
-// AI đánh giá → duplicate template Canva CV 1 → đổi tên + tuỳ biến content → lưu link).
+// Header tab CV_Versions (A1:T1 — 4 cột Canva thêm ngày 23/11/2026, cột changes
+// thêm cùng ngày: tóm tắt bản Canva đã đổi gì so với CV gốc + các lần sửa theo
+// feedback. Luồng mới: AI đánh giá → duplicate template Canva CV 1 → đổi tên +
+// tuỳ biến content → lưu link. QA review (FR-20) đã bỏ theo ý Shu 19:23 23/11/2026.)
 const CV_HEADER = [
   "cv_id", "job_id", "job_title", "company", "role", "version", "file_name",
   "docx_url", "pdf_url", "status", "qa_status", "qa_note", "created_at",
   "approved_at", "notes", "canva_url", "canva_design_id", "canva_status",
-  "canva_pdf_url",
+  "canva_pdf_url", "changes",
 ];
 
 function rowsToCVVersions(rows: string[][]): CVVersion[] {
@@ -158,6 +160,7 @@ function rowsToCVVersions(rows: string[][]): CVVersion[] {
       canva_design_id: get("canva_design_id"),
       canva_pdf_url: get("canva_pdf_url"),
       canva_status: (get("canva_status") || "Chưa tạo") as CVVersion["canva_status"],
+      changes: get("changes"),
     } satisfies CVVersion;
   });
 }
@@ -187,7 +190,7 @@ export async function loadSheetData(): Promise<SheetData | null> {
     // Tab Jobs có 30 cột (job_id → notes, cột A→AD). Đọc đủ A1:AD — đọc A1:Z
     // sẽ mất 4 cột cuối (is_matched, status, is_duplicate, notes).
     readRange("Jobs!A1:AD"),
-    readRange("CV_Versions!A1:S"),
+    readRange("CV_Versions!A1:T"),
     readRange("Applications!A1:Z"),
   ]);
   return {
@@ -223,7 +226,7 @@ export async function appendCVVersion(v: CVVersion): Promise<void> {
   const sheets = sheetsWriteClient();
   await sheets.spreadsheets.values.append({
     spreadsheetId: SHEET_ID,
-    range: "CV_Versions!A:S",
+    range: "CV_Versions!A:T",
     valueInputOption: "RAW",
     insertDataOption: "INSERT_ROWS",
     requestBody: {
@@ -232,7 +235,7 @@ export async function appendCVVersion(v: CVVersion): Promise<void> {
         v.file_name, v.docx_url, v.pdf_url, v.status, v.qa_status, v.qa_note,
         v.created_at, v.approved_at, v.notes,
         v.canva_url ?? "", v.canva_design_id ?? "", v.canva_status ?? "Chờ xử lý",
-        v.canva_pdf_url ?? "",
+        v.canva_pdf_url ?? "", v.changes ?? "",
       ]],
     },
   });
@@ -248,17 +251,19 @@ export interface CVVersionPatch {
   canva_design_id?: string;
   canva_pdf_url?: string;
   canva_status?: CVVersion["canva_status"];
+  changes?: string;
 }
 
 const CV_COL: Record<string, string> = {
   status: "J", qa_status: "K", qa_note: "L", approved_at: "N", notes: "O",
   canva_url: "P", canva_design_id: "Q", canva_status: "R", canva_pdf_url: "S",
+  changes: "T",
 };
 
 /** FR-14/FR-20: cập nhật trạng thái / kết quả QA của một bản CV theo cv_id. */
 export async function updateCVVersion(cvId: string, patch: CVVersionPatch): Promise<boolean> {
   const sheets = sheetsWriteClient();
-  const rows = await readRange("CV_Versions!A1:S");
+  const rows = await readRange("CV_Versions!A1:T");
   const header = rows[0] ?? CV_HEADER;
   const idx = rows.slice(1).findIndex((r) => r[header.indexOf("cv_id")] === cvId);
   if (idx < 0) return false;

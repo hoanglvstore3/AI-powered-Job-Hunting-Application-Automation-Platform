@@ -52,7 +52,7 @@ export function CvGenerateButton({ jobId }: { jobId: string }) {
           {" · "}
           <a href="/cv">Xem ở trang CV</a>
         </p>
-        <p className="muted">Trạng thái: Chờ duyệt · QA: Chờ @h1h6qabot đánh giá.</p>
+        <p className="muted">Trạng thái: Chờ duyệt · Bản Canva sẽ được worker chuẩn bị trong vài phút.</p>
       </div>
     );
   }
@@ -65,6 +65,61 @@ export function CvGenerateButton({ jobId }: { jobId: string }) {
       <p className="muted">
         Tạo bản DOCX + PDF từ CV gốc (chỉ dùng dữ kiện thật, §10), lưu lên Drive và ghi vào tab CV_Versions.
       </p>
+    </div>
+  );
+}
+
+/** Ô feedback cho một bản CV đã có bản Canva — Shu gửi feedback, worker Canva
+    (cron canva-cv-worker-2m) áp dụng sửa rồi báo lại. Thay cho QA review (FR-20,
+    đã bỏ theo ý Shu 19:23 ngày 23/11/2026). */
+export function CvFeedbackForm({ cvId, canvaStatus }: { cvId: string; canvaStatus: string }) {
+  const [text, setText] = useState("");
+  const [state, setState] = useState<"idle" | "busy" | "done" | "error">("idle");
+  const [error, setError] = useState("");
+  const router = useRouter();
+
+  async function onSend() {
+    if (!text.trim()) return;
+    setState("busy");
+    setError("");
+    const { status, data } = await postJson(`/api/cv/${encodeURIComponent(cvId)}/feedback`, { feedback: text.trim() });
+    if (status === 200 && data?.ok) {
+      setText("");
+      setState("done");
+      router.refresh();
+    } else {
+      setError(data?.error || "Không gửi được feedback.");
+      setState("error");
+    }
+  }
+
+  if (canvaStatus === "Chờ sửa" || canvaStatus === "Đang sửa") {
+    return (
+      <p className="muted">
+        Đã nhận feedback, DevBot đang cập nhật bản Canva này — xong sẽ báo lại.
+      </p>
+    );
+  }
+
+  return (
+    <div>
+      <label htmlFor={`fb-${cvId}`}><strong>Feedback cho bản Canva này:</strong></label>
+      <textarea
+        id={`fb-${cvId}`}
+        rows={3}
+        value={text}
+        onChange={(e) => { setText(e.target.value); setState("idle"); }}
+        placeholder="VD: đổi câu strengths thành nhấn mạnh kinh nghiệm Java, đưa Spring Boot lên đầu dòng Frameworks…"
+        style={{ width: "100%", marginTop: 6 }}
+      />
+      <div className="btn-row" style={{ marginTop: 6 }}>
+        <button type="button" className="btn-primary" onClick={onSend} disabled={state === "busy" || !text.trim()}>
+          {state === "busy" ? "Đang gửi…" : "Gửi feedback"}
+        </button>
+      </div>
+      {state === "done" && <p className="ok-text">Đã gửi feedback — DevBot sẽ cập nhật bản Canva trong vài phút.</p>}
+      {state === "error" && <p className="error-text">{error}</p>}
+      <p className="muted">Gửi xong, DevBot sửa trực tiếp trên bản Canva và cập nhật lại PDF, không cần QA duyệt.</p>
     </div>
   );
 }

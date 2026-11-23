@@ -83,7 +83,8 @@ export default async function JobDetail({ params }: { params: { id: string } }) 
             <ul>
               {versions.map((v) => (
                 <li key={v.cv_id}>
-                  v{v.version} — {v.file_name} · {v.status} · QA: {v.qa_status}
+                  v{v.version} — {v.file_name} · {v.status}
+                  {v.canva_status === "Chờ sửa" || v.canva_status === "Đang sửa" ? ` · Canva: ${v.canva_status}` : ""}
                   {" · "}
                   <a href={v.docx_url} target="_blank" rel="noreferrer">DOCX</a>
                   {" · "}
@@ -114,7 +115,7 @@ export default async function JobDetail({ params }: { params: { id: string } }) 
       </div>
       <p className="muted">
         Giai đoạn 3: đổi trạng thái job và duyệt CV thực hiện ngay trên website, ghi ngược về Google Sheet (§8, v1.5).
-        Sau khi tạo CV tuỳ biến, @h1h6qabot đánh giá CV đối chiếu yêu cầu job và quy tắc cứng §10 (FR-20) trước khi bạn duyệt.
+        QA review (FR-20) đã bỏ — thay bằng ô feedback trên trang CV: gửi feedback, DevBot cập nhật trực tiếp bản Canva.
       </p>
     </div>
   );

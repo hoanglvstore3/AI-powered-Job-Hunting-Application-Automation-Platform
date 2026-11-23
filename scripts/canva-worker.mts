@@ -10,7 +10,11 @@
 //
 // Worker đọc các dòng CV_Versions có canva_status = "Chờ xử lý", xử lý 1 dòng
 // mỗi lần chạy (export PDF mất ~40s, cron timeout 120s). Ghi canva_design_id
-// ngay sau khi copy để chạy lại không tạo trùng design (idempotent).
+// ngay sau khi copy để chạy lại không tạo trùng design (idempotent). Khi xong,
+// ghi tóm tắt thay đổi so với CV gốc vào cột changes để Shu kiểm tra nhanh.
+// Dòng "Chờ sửa" (Shu gửi feedback trên web) KHÔNG do script này xử lý —
+// cron agent sẽ áp dụng feedback trực tiếp trên Canva (cần hiểu ngôn ngữ tự
+// nhiên), rồi export lại PDF và ghi changes. Xem cron canva-cv-worker-2m.
 // Chạy: cd app && npx -y tsx --env-file=.env.local scripts/canva-worker.mts
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
@@ -83,8 +87,9 @@ function findTextElement(content: DesignContent, pred: (t: string) => boolean): 
   return null;
 }
 
-/** Đưa skill khớp lên đầu dòng "Programming Languages: ..." (giữ nguyên casing gốc). */
-function reorderLanguages(line: string, matched: string[]): string | null {
+/** Đưa skill khớp lên đầu dòng "Programming Languages: ..." (giữ nguyên casing gốc).
+    Trả về dòng mới + danh sách skill đã đưa lên đầu, hoặc null nếu không đổi. */
+function reorderLanguages(line: string, matched: string[]): { line: string; front: string[] } | null {
   const m = line.match(/Programming Languages:\s*([^\n]+)/);
   if (!m) return null;
   const items = m[1].replace(/\.$/, "").split(",").map((s) => s.trim()).filter(Boolean);
@@ -96,7 +101,7 @@ function reorderLanguages(line: string, matched: string[]): string | null {
   const reordered = [...front, ...rest].join(", ") + ".";
   const original = m[1].trim();
   if (reordered === original) return null;
-  return reordered;
+  return { line: reordered, front };
 }
 
 async function processOne(cv: {
@@ -147,6 +152,8 @@ async function processOne(cv: {
   }
 
   // 3. Chuẩn bị các thao tác sửa (chỉ đổi 2 chỗ, còn lại giữ nguyên).
+  // Ghi lại từng thay đổi để viết vào cột changes (Shu kiểm tra nhanh).
+  const changeParts: string[] = [`Đổi tên → ${cv.file_name}`];
   const ops: Record<string, unknown>[] = [
     { type: "update_title", title: cv.file_name },
   ];
@@ -160,6 +167,7 @@ async function processOne(cv: {
         find_text: aboutText,
         replace_text: aboutText + sentence,
       });
+      changeParts.push(`About Me: thêm câu strengths (${analysis.matchedSkills.join(", ")})`);
     }
   }
   const skillsText = elementText(skillsEl);
@@ -170,8 +178,9 @@ async function processOne(cv: {
       type: "find_and_replace_text",
       locator_id: skillsEl.locator_id,
       find_text: originalLine,
-      replace_text: reordered,
+      replace_text: reordered.line,
     });
+    changeParts.push(`Programming Languages: ${reordered.front.join(", ")} lên đầu`);
   }
 
   // 4. Áp dụng sửa (keep_open) rồi kiểm chứng trước khi commit.
@@ -235,6 +244,8 @@ async function processOne(cv: {
     canva_design_id: designId,
     canva_pdf_url: uploaded.webViewLink,
     canva_status: "Hoàn thành",
+    // Tóm tắt thay đổi so với CV gốc để Shu kiểm tra nhanh trên trang /cv.
+    changes: changeParts.join("; "),
   });
   console.log(`[${cv.cv_id}] done: ${editUrl}`);
 }
