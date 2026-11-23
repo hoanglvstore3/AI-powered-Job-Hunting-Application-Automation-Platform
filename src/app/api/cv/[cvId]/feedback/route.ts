@@ -10,9 +10,17 @@ import { verifySessionToken, SESSION_COOKIE } from "@/lib/session";
 import { loadSheetData, updateCVVersion } from "@/lib/sheets";
 
 function vnNow(): string {
-  const d = new Date();
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${p(d.getHours())}:${p(d.getMinutes())} ${p(d.getDate())}/${p(d.getMonth() + 1)}`;
+  // Server chạy ở UTC nên phải đổi sang giờ Việt Nam (Asia/Bangkok) cho đúng.
+  const parts = new Intl.DateTimeFormat("vi-VN", {
+    timeZone: "Asia/Bangkok",
+    hour: "2-digit",
+    minute: "2-digit",
+    day: "2-digit",
+    month: "2-digit",
+    hour12: false,
+  }).formatToParts(new Date());
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
+  return `${get("hour")}:${get("minute")} ${get("day")}/${get("month")}`;
 }
 
 export async function POST(req: Request, { params }: { params: { cvId: string } }) {
