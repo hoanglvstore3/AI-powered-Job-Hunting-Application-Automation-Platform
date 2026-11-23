@@ -211,6 +211,16 @@ export function extractSkillsFromJD(jdText: string): { matched: string[]; missin
   return { matched, missing };
 }
 
+/** Kiểm tra một chuỗi có phải skill đã biết (trong từ điển JD hoặc CV gốc) không.
+    Dùng khi tuỳ biến lại CV theo JD: giữ lại từ khoá do Shu thêm tay vào câu
+    strengths (VD: FSOFT, Đà Nẵng) — những từ này không phải skill nên không bị
+    tính lại, tránh làm mất sửa tay của Shu khi thay câu strengths mới. */
+export function isKnownSkill(s: string): boolean {
+  const n = normSkill(s);
+  if (baseCvSkillSet().has(n)) return true;
+  return JD_SKILL_VOCAB.some(([canonical]) => normSkill(canonical) === n);
+}
+
 export interface CVAnalysis {
   /** Skill job yêu cầu mà CV gốc có. */
   matchedSkills: string[];

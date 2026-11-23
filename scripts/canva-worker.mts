@@ -25,7 +25,7 @@ import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadSheetData, updateCVVersion, uploadCVToDrive } from "../src/lib/sheets";
-import { analyzeCV } from "../src/lib/cv";
+import { analyzeCV, isKnownSkill } from "../src/lib/cv";
 
 const CANVA_BIN = "/opt/hatch/bin/canva";
 // Template Canva "Lê Việt Hoàng CV 1" của Shu (2 trang A4, nội dung = CV gốc).
@@ -296,14 +296,23 @@ async function retaylorOne(cv: {
   const changeParts: string[] = [];
   const ops: Record<string, unknown>[] = [];
   // 1. Câu strengths: thay bằng câu mới (tính từ phân tích đã gộp JD).
+  // Giữ lại từ khoá do Shu thêm tay (không phải skill, VD: FSOFT, Đà Nẵng)
+  // để tuỳ biến lại không làm mất sửa tay của Shu.
   const aboutText = elementText(aboutEl);
   const marker = "Relevant strengths for the";
   const baseAbout = aboutText.includes(marker)
     ? aboutText.slice(0, aboutText.indexOf(marker)).trimEnd()
     : aboutText;
+  const oldItems = (() => {
+    const m = aboutText.match(/Relevant strengths for the[^:]*:\s*([^\n]+)/);
+    if (!m) return [] as string[];
+    return m[1].replace(/\.$/, "").split(",").map((s) => s.trim()).filter(Boolean);
+  })();
+  const carriedKeywords = oldItems.filter((it) => !isKnownSkill(it));
+  const allListed = [...analysis.matchedSkills, ...carriedKeywords];
   const newSentence =
-    analysis.matchedSkills.length > 0
-      ? ` Relevant strengths for the ${job.role || job.job_title} role at ${job.company}: ${analysis.matchedSkills.join(", ")}.`
+    allListed.length > 0
+      ? ` Relevant strengths for the ${job.role || job.job_title} role at ${job.company}: ${allListed.join(", ")}.`
       : "";
   const newAbout = baseAbout + newSentence;
   if (newAbout !== aboutText) {
@@ -315,7 +324,7 @@ async function retaylorOne(cv: {
     });
     changeParts.push(
       newSentence
-        ? `JD mới: cập nhật câu strengths (${analysis.matchedSkills.join(", ")})`
+        ? `JD mới: cập nhật câu strengths (${allListed.join(", ")})`
         : "JD mới: xoá câu strengths (không còn skill khớp)",
     );
   }
