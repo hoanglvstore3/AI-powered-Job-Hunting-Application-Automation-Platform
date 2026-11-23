@@ -6,6 +6,7 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 import { loadSheetData } from "@/lib/sheets";
 import { buildNotifications, type AppNotification } from "@/lib/notifications";
+import MarkNotificationsSeen from "@/components/MarkNotificationsSeen";
 
 export const dynamic = "force-dynamic";
 
@@ -41,16 +42,9 @@ export default async function NotificationsPage() {
   const seenAt = cookies().get("jobhunt_seen_at")?.value;
   const seenMs = seenAt ? new Date(seenAt).getTime() : 0;
 
-  // Đánh dấu đã xem: lần mở trang sau chuông sẽ hết badge.
-  cookies().set("jobhunt_seen_at", new Date().toISOString(), {
-    httpOnly: true,
-    path: "/",
-    maxAge: 60 * 60 * 24 * 365,
-    sameSite: "lax",
-  });
-
   return (
     <div>
+      <MarkNotificationsSeen />
       <h1>Thông báo</h1>
       <p className="muted">
         Job mới khớp, CV mới tạo / duyệt / cần sửa, email ứng tuyển đã soạn / đã gửi.
