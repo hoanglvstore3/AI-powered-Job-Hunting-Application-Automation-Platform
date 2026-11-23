@@ -61,11 +61,21 @@ export interface Source {
 export interface CVVersion {
   cv_id: string;
   job_id: string;
+  job_title: string;
   company: string;
   role: string;
-  status: "Chờ duyệt" | "Đã duyệt" | "Từ chối" | "Cần sửa";
+  version: number;
+  file_name: string;
+  docx_url: string;
+  pdf_url: string;
+  /** Bí danh của pdf_url — giữ để tương thích với code cũ dùng file_url. */
   file_url: string;
+  status: "Chờ duyệt" | "Đã duyệt" | "Từ chối" | "Cần sửa";
+  qa_status: "Chờ QA" | "Đạt" | "Cần sửa" | "Không đạt";
+  qa_note: string;
   created_at: string;
+  approved_at: string;
+  notes: string;
 }
 
 export interface Application {

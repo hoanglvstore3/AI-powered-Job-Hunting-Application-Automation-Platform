@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { loadSheetData } from "@/lib/sheets";
+import { analyzeCV } from "@/lib/cv";
+import { CvGenerateButton, JobStatusChanger } from "@/components/cv-actions";
 import { SAMPLE_JOBS } from "@/data/sample-jobs";
 
 export const dynamic = "force-dynamic";
@@ -10,6 +12,9 @@ export default async function JobDetail({ params }: { params: { id: string } }) 
   const jobs = sheet?.jobs ?? SAMPLE_JOBS;
   const job = jobs.find((j) => j.job_id === decodeURIComponent(params.id));
   if (!job) notFound();
+  const isSample = !sheet;
+  const analysis = analyzeCV(job);
+  const versions = (sheet?.cvVersions ?? []).filter((v) => v.job_id === job.job_id);
 
   return (
     <div>
@@ -41,6 +46,56 @@ export default async function JobDetail({ params }: { params: { id: string } }) 
         </div>
       </div>
       <div className="card">
+        <h2>Phân tích CV gốc cho job này (FR-12)</h2>
+        <p>{analysis.roleFit}</p>
+        <p>Skill khớp với CV gốc:</p>
+        <div className="chip-row">
+          {analysis.matchedSkills.length > 0
+            ? analysis.matchedSkills.map((s) => (<span key={s} className="chip ok">✓ {s}</span>))
+            : <span className="muted">—</span>}
+        </div>
+        <p>Skill thiếu — CV gốc chưa có, không chèn vào CV (§10):</p>
+        <div className="chip-row">
+          {analysis.missingSkills.length > 0
+            ? analysis.missingSkills.map((s) => (<span key={s} className="chip miss">{s}</span>))
+            : <span className="muted">—</span>}
+        </div>
+        {analysis.keywordsMissing.length > 0 && (
+          <p>Từ khoá trong tiêu đề job mà CV gốc chưa nhắc tới: {analysis.keywordsMissing.join(", ")}</p>
+        )}
+        <p>Đề xuất sửa cụ thể:</p>
+        <ul>
+          {analysis.suggestions.map((s, i) => (
+            <li key={i}><strong>{s.section}:</strong> {s.text}</li>
+          ))}
+        </ul>
+      </div>
+      <div className="card">
+        <h2>CV tuỳ biến (FR-13 / FR-14)</h2>
+        {isSample ? (
+          <p className="muted">Chưa có dữ liệu thật nên chưa tạo được CV tuỳ biến.</p>
+        ) : (
+          <CvGenerateButton jobId={job.job_id} />
+        )}
+        {versions.length > 0 && (
+          <div>
+            <p>Các bản đã tạo cho job này:</p>
+            <ul>
+              {versions.map((v) => (
+                <li key={v.cv_id}>
+                  v{v.version} — {v.file_name} · {v.status} · QA: {v.qa_status}
+                  {" · "}
+                  <a href={v.docx_url} target="_blank" rel="noreferrer">DOCX</a>
+                  {" · "}
+                  <a href={v.pdf_url} target="_blank" rel="noreferrer">PDF</a>
+                </li>
+              ))}
+            </ul>
+            <p><a href="/cv">Mở trang CV để duyệt</a></p>
+          </div>
+        )}
+      </div>
+      <div className="card">
         <h2>Thông tin trích xuất (FR-03)</h2>
         <table><tbody>
           <tr><td>Công ty</td><td>{job.company || "Chưa rõ"}</td></tr>
@@ -49,7 +104,7 @@ export default async function JobDetail({ params }: { params: { id: string } }) 
           <tr><td>Hạn nộp</td><td>{job.deadline || "Chưa rõ"}</td></tr>
           <tr><td>Email tuyển dụng</td><td>{job.contact_email || "Chưa rõ"}</td></tr>
           <tr><td>Cách ứng tuyển</td><td>{job.apply_method || "Chưa rõ"}</td></tr>
-          <tr><td>Trạng thái</td><td>{job.status}</td></tr>
+          <tr><td>Trạng thái</td><td>{isSample ? job.status : <JobStatusChanger jobId={job.job_id} current={job.status} />}</td></tr>
         </tbody></table>
       </div>
       <div className="card">
@@ -58,7 +113,8 @@ export default async function JobDetail({ params }: { params: { id: string } }) 
         <p><a href={job.post_url} target="_blank" rel="noreferrer">Bài đăng gốc ↗</a></p>
       </div>
       <p className="muted">
-        Giai đoạn đầu website chỉ đọc: đổi trạng thái, ghi chú và duyệt CV thực hiện trực tiếp trên Google Sheet (§8).
+        Giai đoạn 3: đổi trạng thái job và duyệt CV thực hiện ngay trên website, ghi ngược về Google Sheet (§8, v1.5).
+        Sau khi tạo CV tuỳ biến, @h1h6qabot đánh giá CV đối chiếu yêu cầu job và quy tắc cứng §10 (FR-20) trước khi bạn duyệt.
       </p>
     </div>
   );

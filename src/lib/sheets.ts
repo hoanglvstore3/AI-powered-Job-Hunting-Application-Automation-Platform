@@ -1,13 +1,26 @@
 // Đọc Google Sheet "Job Hunting — Data" (§6) qua Google Sheets API, server-side only.
 // Website KHÔNG lưu bản sao dữ liệu job riêng (§8). Credential chỉ ở server (§13).
 // Khi chưa cấu hình GOOGLE_SHEET_ID thì trả về null — caller dùng dữ liệu mẫu có ghi rõ.
+//
+// Ghi ngược (Giai đoạn 3, v1.5 §8 "cần uỷ quyền ghi riêng"): service account đã
+// được chia sẻ quyền Editor trên Sheet (23/11/2026) và trên thư mục Drive "CV".
+// Client ghi dùng scope spreadsheets + drive (SA chỉ thấy những gì được chia sẻ).
+// Mọi lần ghi đều ghi rõ trong nhật ký: ai/lúc nào (created_at/approved_at).
+import { Readable } from "node:stream";
 import { google } from "googleapis";
 import type { Job, Source, CVVersion, Application } from "./types";
 
 const SHEET_ID = process.env.GOOGLE_SHEET_ID || "";
+const CV_FOLDER_ID = process.env.GOOGLE_DRIVE_CV_FOLDER_ID || "";
+const OWNER_EMAIL = "hoanglvjob3@gmail.com";
 
 export function isSheetConfigured(): boolean {
   return Boolean(SHEET_ID && process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+}
+
+/** Ghi ngược cần thêm thư mục Drive chứa CV tuỳ biến. */
+export function isWriteConfigured(): boolean {
+  return isSheetConfigured() && Boolean(CV_FOLDER_ID);
 }
 
 function sheetsClient() {
@@ -17,6 +30,25 @@ function sheetsClient() {
     scopes: ["https://www.googleapis.com/auth/spreadsheets.readonly"],
   });
   return google.sheets({ version: "v4", auth });
+}
+
+function writeAuth() {
+  const creds = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON as string);
+  return new google.auth.GoogleAuth({
+    credentials: creds,
+    scopes: [
+      "https://www.googleapis.com/auth/spreadsheets",
+      "https://www.googleapis.com/auth/drive",
+    ],
+  });
+}
+
+function sheetsWriteClient() {
+  return google.sheets({ version: "v4", auth: writeAuth() });
+}
+
+function driveWriteClient() {
+  return google.drive({ version: "v3", auth: writeAuth() });
 }
 
 async function readRange(range: string): Promise<string[][]> {
@@ -86,30 +118,187 @@ export interface SheetData {
   lastSyncAt: string;
 }
 
+// Header tab CV_Versions (A1:O1, tạo ngày 23/11/2026 — Giai đoạn 3, v1.5).
+const CV_HEADER = [
+  "cv_id", "job_id", "job_title", "company", "role", "version", "file_name",
+  "docx_url", "pdf_url", "status", "qa_status", "qa_note", "created_at",
+  "approved_at", "notes",
+];
+
+function rowsToCVVersions(rows: string[][]): CVVersion[] {
+  if (rows.length < 2) return [];
+  const header = rows[0];
+  return rows.slice(1).map((r) => {
+    const get = (name: string) => r[header.indexOf(name)] ?? "";
+    const pdf = get("pdf_url");
+    return {
+      cv_id: get("cv_id"),
+      job_id: get("job_id"),
+      job_title: get("job_title"),
+      company: get("company"),
+      role: get("role"),
+      version: Number(get("version") || 1),
+      file_name: get("file_name"),
+      docx_url: get("docx_url"),
+      pdf_url: pdf,
+      file_url: pdf,
+      status: (get("status") || "Chờ duyệt") as CVVersion["status"],
+      qa_status: (get("qa_status") || "Chờ QA") as CVVersion["qa_status"],
+      qa_note: get("qa_note"),
+      created_at: get("created_at"),
+      approved_at: get("approved_at"),
+      notes: get("notes"),
+    } satisfies CVVersion;
+  });
+}
+
+function rowsToApplications(rows: string[][]): Application[] {
+  if (rows.length < 2) return [];
+  const header = rows[0];
+  return rows.slice(1).map((r) => {
+    const get = (name: string) => r[header.indexOf(name)] ?? "";
+    return {
+      job_id: get("job_id"),
+      company: get("company"),
+      role: get("role"),
+      draft_status: (get("draft_status") || "Chưa tạo") as Application["draft_status"],
+      draft_id: get("draft_id"),
+      reason_no_draft: get("reason_no_draft"),
+      applied_at: get("applied_at"),
+    } satisfies Application;
+  });
+}
+
 export async function loadSheetData(): Promise<SheetData | null> {
   if (!isSheetConfigured()) return null;
-  const [jobRows, sourceRows] = await Promise.all([
+  // Tab Sources và Profile đã bị xoá khỏi Sheet (v1.5) — không đọc nữa, nếu không
+  // cả loadSheetData sẽ lỗi và website rơi về dữ liệu mẫu. Nguồn suy ra từ job.
+  const [jobRows, cvRows, appRows] = await Promise.all([
     // Tab Jobs có 30 cột (job_id → notes, cột A→AD). Đọc đủ A1:AD — đọc A1:Z
     // sẽ mất 4 cột cuối (is_matched, status, is_duplicate, notes).
     readRange("Jobs!A1:AD"),
-    readRange("Sources!A1:Z"),
+    readRange("CV_Versions!A1:O"),
+    readRange("Applications!A1:Z"),
   ]);
-  const sources: Source[] = sourceRows.slice(1).map((r) => ({
-    source_id: r[0] ?? "",
-    name: r[1] ?? "",
-    url: r[2] ?? "",
-    type: (r[3] as Source["type"]) || "",
-    verified: parseBoolCell(r[4] ?? ""),
-    enabled: parseBoolCell(r[5] ?? ""),
-    is_private: r[6] ? parseBoolCell(r[6]) : null,
-    note: r[7] ?? "",
-  }));
-  // CV_Versions và Applications đọc ở giai đoạn 3–4; giai đoạn 2 trả về rỗng có chủ đích.
   return {
     jobs: rowsToJobs(jobRows).sort((a, b) => b.posted_at.localeCompare(a.posted_at)),
-    sources,
-    cvVersions: [],
-    applications: [],
+    sources: [],
+    cvVersions: rowsToCVVersions(cvRows),
+    applications: rowsToApplications(appRows),
     lastSyncAt: new Date().toISOString(),
   };
+}
+
+// ---------------------------------------------------------------------------
+// Ghi ngược (Giai đoạn 3): CV_Versions, trạng thái job, upload CV lên Drive.
+// ---------------------------------------------------------------------------
+
+/** FR-13: ghi một dòng mới vào CV_Versions. */
+export async function appendCVVersion(v: CVVersion): Promise<void> {
+  const sheets = sheetsWriteClient();
+  await sheets.spreadsheets.values.append({
+    spreadsheetId: SHEET_ID,
+    range: "CV_Versions!A:O",
+    valueInputOption: "RAW",
+    insertDataOption: "INSERT_ROWS",
+    requestBody: {
+      values: [[
+        v.cv_id, v.job_id, v.job_title, v.company, v.role, String(v.version),
+        v.file_name, v.docx_url, v.pdf_url, v.status, v.qa_status, v.qa_note,
+        v.created_at, v.approved_at, v.notes,
+      ]],
+    },
+  });
+}
+
+export interface CVVersionPatch {
+  status?: CVVersion["status"];
+  qa_status?: CVVersion["qa_status"];
+  qa_note?: string;
+  approved_at?: string;
+  notes?: string;
+}
+
+const CV_COL: Record<string, string> = {
+  status: "J", qa_status: "K", qa_note: "L", approved_at: "N", notes: "O",
+};
+
+/** FR-14/FR-20: cập nhật trạng thái / kết quả QA của một bản CV theo cv_id. */
+export async function updateCVVersion(cvId: string, patch: CVVersionPatch): Promise<boolean> {
+  const sheets = sheetsWriteClient();
+  const rows = await readRange("CV_Versions!A1:O");
+  const header = rows[0] ?? CV_HEADER;
+  const idx = rows.slice(1).findIndex((r) => r[header.indexOf("cv_id")] === cvId);
+  if (idx < 0) return false;
+  const rowNo = idx + 2; // +1 header, +1 vì findIndex trên slice(1)
+  for (const [key, value] of Object.entries(patch)) {
+    if (value === undefined) continue;
+    const col = CV_COL[key];
+    if (!col) continue;
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: SHEET_ID,
+      range: `CV_Versions!${col}${rowNo}`,
+      valueInputOption: "RAW",
+      requestBody: { values: [[value]] },
+    });
+  }
+  return true;
+}
+
+/** FR-11: đổi trạng thái job trên website, ghi ngược về tab Jobs. */
+export async function updateJobStatus(jobId: string, status: string): Promise<boolean> {
+  const sheets = sheetsWriteClient();
+  const rows = await readRange("Jobs!A1:AD");
+  if (rows.length < 2) return false;
+  const header = rows[0];
+  const statusCol = header.indexOf("status");
+  const idCol = header.indexOf("job_id");
+  if (statusCol < 0 || idCol < 0) return false;
+  const idx = rows.slice(1).findIndex((r) => r[idCol] === jobId);
+  if (idx < 0) return false;
+  // Cột status là cột AB (index 27) — cần chuyển số cột sang chữ cái kiểu AA/AB...,
+  // không dùng String.fromCharCode('A' + idx) vì chỉ đúng tới cột Z.
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: SHEET_ID,
+    range: `Jobs!${columnLetter(statusCol)}${idx + 2}`,
+    valueInputOption: "RAW",
+    requestBody: { values: [[status]] },
+  });
+  return true;
+}
+
+/** Đổi index cột 0-based sang chữ cái A1 (0→A, 25→Z, 26→AA, 27→AB...). */
+function columnLetter(idx: number): string {
+  let s = "";
+  let n = idx;
+  while (n >= 0) {
+    s = String.fromCharCode(65 + (n % 26)) + s;
+    n = Math.floor(n / 26) - 1;
+  }
+  return s;
+}
+
+export interface UploadedCVFile {
+  id: string;
+  webViewLink: string;
+}
+
+/** FR-13: upload file CV vào thư mục Drive "CV", chia sẻ quyền đọc cho chủ sở hữu. */
+export async function uploadCVToDrive(
+  fileName: string,
+  mimeType: string,
+  buffer: Buffer,
+): Promise<UploadedCVFile> {
+  const drive = driveWriteClient();
+  const res = await drive.files.create({
+    requestBody: { name: fileName, mimeType, parents: [CV_FOLDER_ID] },
+    media: { mimeType, body: Readable.from(buffer) },
+    fields: "id,webViewLink",
+  });
+  const id = res.data.id as string;
+  await drive.permissions.create({
+    fileId: id,
+    requestBody: { type: "user", role: "reader", emailAddress: OWNER_EMAIL },
+  });
+  return { id, webViewLink: res.data.webViewLink as string };
 }
