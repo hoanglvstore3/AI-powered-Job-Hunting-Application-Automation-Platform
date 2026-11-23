@@ -97,4 +97,9 @@ export interface Application {
   draft_id: string;
   reason_no_draft: string;
   applied_at: string;
+  /** Nội dung email ứng tuyển (Giai đoạn 4 — chỉ soạn content, KHÔNG gửi Gmail). */
+  email_to: string;
+  email_subject: string;
+  email_body: string;
+  created_at: string;
 }

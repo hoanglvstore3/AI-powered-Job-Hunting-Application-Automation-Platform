@@ -179,6 +179,10 @@ function rowsToApplications(rows: string[][]): Application[] {
       draft_id: get("draft_id"),
       reason_no_draft: get("reason_no_draft"),
       applied_at: get("applied_at"),
+      email_to: get("email_to"),
+      email_subject: get("email_subject"),
+      email_body: get("email_body"),
+      created_at: get("created_at"),
     } satisfies Application;
   });
 }
@@ -364,4 +368,91 @@ export async function uploadCVToDrive(
   });
   const id = res.data.id as string;
   return { id, webViewLink: res.data.webViewLink as string };
+}
+
+// ---------------------------------------------------------------------------
+// Ghi ngược (Giai đoạn 4): tab Applications — nội dung email ứng tuyển.
+// Tab này đang trống (chưa có header) nên lần ghi đầu tiên sẽ tạo header.
+// Chỉ soạn nội dung email, KHÔNG gửi Gmail (Shu dặn tin 295, 18:17 23/11/2026).
+const APP_HEADER = [
+  "job_id", "company", "role", "draft_status", "draft_id", "reason_no_draft",
+  "applied_at", "email_to", "email_subject", "email_body", "created_at",
+];
+
+export interface ApplicationDraft {
+  job_id: string;
+  company: string;
+  role: string;
+  email_to: string;
+  email_subject: string;
+  email_body: string;
+}
+
+/** Tạo mới hoặc cập nhật dòng Applications cho 1 job (mỗi job tối đa 1 draft). */
+export async function upsertApplication(d: ApplicationDraft): Promise<boolean> {
+  const sheets = sheetsWriteClient();
+  const rows = await readRange("Applications!A1:Z");
+  if (rows.length === 0) {
+    // Tab trống — tạo header trước.
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: SHEET_ID,
+      range: "Applications!A1:K",
+      valueInputOption: "RAW",
+      requestBody: { values: [APP_HEADER] },
+    });
+  }
+  const header = rows.length === 0 ? APP_HEADER : rows[0];
+  const idCol = header.indexOf("job_id");
+  const idx = rows.length === 0 ? -1 : rows.slice(1).findIndex((r) => r[idCol] === d.job_id);
+  const now = new Date().toISOString();
+  const rowValues = [
+    d.job_id, d.company, d.role, "Đã tạo draft", "", "",
+    "", d.email_to, d.email_subject, d.email_body, now,
+  ];
+  if (idx >= 0) {
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: SHEET_ID,
+      range: `Applications!A${idx + 2}:K${idx + 2}`,
+      valueInputOption: "RAW",
+      requestBody: { values: [rowValues] },
+    });
+  } else {
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: SHEET_ID,
+      range: "Applications!A:K",
+      valueInputOption: "RAW",
+      insertDataOption: "INSERT_ROWS",
+      requestBody: { values: [rowValues] },
+    });
+  }
+  return true;
+}
+
+/** Đánh dấu 1 draft đã được Shu tự gửi (không đụng Gmail). */
+export async function markApplicationSent(jobId: string): Promise<boolean> {
+  const sheets = sheetsWriteClient();
+  const rows = await readRange("Applications!A1:Z");
+  if (rows.length < 2) return false;
+  const header = rows[0];
+  const idCol = header.indexOf("job_id");
+  const statusCol = header.indexOf("draft_status");
+  const appliedCol = header.indexOf("applied_at");
+  if (idCol < 0 || statusCol < 0 || appliedCol < 0) return false;
+  const idx = rows.slice(1).findIndex((r) => r[idCol] === jobId);
+  if (idx < 0) return false;
+  const rowNo = idx + 2;
+  const now = new Date().toISOString();
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: SHEET_ID,
+    range: `Applications!${columnLetter(statusCol)}${rowNo}`,
+    valueInputOption: "RAW",
+    requestBody: { values: [["Đã gửi (tự gửi)"]] },
+  });
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: SHEET_ID,
+    range: `Applications!${columnLetter(appliedCol)}${rowNo}`,
+    valueInputOption: "RAW",
+    requestBody: { values: [[now]] },
+  });
+  return true;
 }

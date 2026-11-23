@@ -249,3 +249,122 @@ export function CvReviewButtons({ cvId, status }: { cvId: string; status: string
     </div>
   );
 }
+
+/** Giai đoạn 4 (FR-15/FR-16): soạn + xem nội dung email ứng tuyển cho 1 job.
+    Chỉ soạn content — Shu tự copy rồi gửi tay trong Gmail, website không đụng Gmail. */
+export function EmailDraftSection({
+  jobId,
+  hasApprovedCv,
+  existingDraft,
+}: {
+  jobId: string;
+  hasApprovedCv: boolean;
+  existingDraft: { email_to: string; email_subject: string; email_body: string; draft_status: string } | null;
+}) {
+  const router = useRouter();
+  const [state, setState] = useState<"idle" | "busy" | "done" | "error">("idle");
+  const [draft, setDraft] = useState(existingDraft);
+  const [error, setError] = useState("");
+  const [copied, setCopied] = useState(false);
+  const [sent, setSent] = useState(false);
+
+  async function createDraft() {
+    setState("busy");
+    setError("");
+    const res = await fetch(`/api/applications/${encodeURIComponent(jobId)}/draft`, { method: "POST" });
+    const data = await res.json().catch(() => null);
+    if (res.ok && data?.ok && data.draft) {
+      setDraft({ ...data.draft, draft_status: "Đã tạo draft" });
+      setState("done");
+      router.refresh();
+    } else {
+      setError(data?.error || "Soạn email thất bại.");
+      setState("error");
+    }
+  }
+
+  async function copyDraft() {
+    if (!draft) return;
+    const text = `To: ${draft.email_to}\nSubject: ${draft.email_subject}\n\n${draft.email_body}`;
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setError("Không sao chép được — hãy bôi đen rồi copy tay.");
+    }
+  }
+
+  async function markSent() {
+    setState("busy");
+    setError("");
+    const res = await fetch(`/api/applications/${encodeURIComponent(jobId)}/sent`, { method: "POST" });
+    const data = await res.json().catch(() => null);
+    if (res.ok && data?.ok) {
+      setSent(true);
+      setDraft((d) => (d ? { ...d, draft_status: "Đã gửi (tự gửi)" } : d));
+      setState("done");
+      router.refresh();
+    } else {
+      setError(data?.error || "Đánh dấu đã gửi thất bại.");
+      setState("error");
+    }
+  }
+
+  if (!hasApprovedCv && !draft) {
+    return (
+      <p className="muted">
+        Chưa soạn được email: CV cho job này chưa được duyệt. Hãy duyệt bản CV ở trên trước,
+        rồi quay lại đây soạn email ứng tuyển.
+      </p>
+    );
+  }
+
+  if (!draft) {
+    return (
+      <div>
+        <p className="muted">
+          CV đã duyệt. Bấm để soạn nội dung email ứng tuyển theo mẫu của anh
+          (tiêu đề + nội dung, dùng skill khớp với job). Website chỉ soạn content — anh tự
+          copy rồi gửi trong Gmail.
+        </p>
+        <button type="button" className="btn" onClick={createDraft} disabled={state === "busy"}>
+          {state === "busy" ? "Đang soạn…" : "Soạn email ứng tuyển"}
+        </button>
+        {state === "error" && <p className="error">{error}</p>}
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <p>
+        <strong>Tiêu đề:</strong> {draft.email_subject}
+        <br />
+        <strong>Tới:</strong> {draft.email_to}
+        {draft.draft_status === "Đã gửi (tự gửi)" ? (
+          <> · <span className="pill ok">Đã gửi</span></>
+        ) : (
+          <> · <span className="pill pending">Chưa gửi</span></>
+        )}
+      </p>
+      <pre className="email-body">{draft.email_body}</pre>
+      <p>
+        <button type="button" className="btn" onClick={copyDraft}>
+          {copied ? "Đã sao chép ✓" : "Sao chép nội dung"}
+        </button>
+        {" "}
+        {draft.draft_status !== "Đã gửi (tự gửi)" && (
+          <button type="button" className="btn-ghost" onClick={markSent} disabled={state === "busy"}>
+            {sent ? "Đã đánh dấu đã gửi ✓" : "Đã gửi email (tự gửi trong Gmail)"}
+          </button>
+        )}
+      </p>
+      {state === "error" && <p className="error">{error}</p>}
+      <p className="muted">
+        Gửi xong trong Gmail thì bấm “Đã gửi email” để website ghi lại ngày ứng tuyển
+        và chuyển job sang trạng thái Applied.
+      </p>
+    </div>
+  );
+}

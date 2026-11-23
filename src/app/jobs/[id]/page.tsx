@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { loadSheetData } from "@/lib/sheets";
 import { analyzeCV } from "@/lib/cv";
-import { CvGenerateButton, JobDescriptionForm, JobStatusChanger } from "@/components/cv-actions";
+import { CvGenerateButton, EmailDraftSection, JobDescriptionForm, JobStatusChanger } from "@/components/cv-actions";
 import { SAMPLE_JOBS } from "@/data/sample-jobs";
 
 export const dynamic = "force-dynamic";
@@ -35,6 +35,9 @@ export default async function JobDetail({ params }: { params: { id: string } }) 
   // Lỗi vì lý do khác (VD: feedback không áp dụng được) — vẫn phải hiện dòng
   // trạng thái, không để card JD trống.
   const cvError = Boolean(latest && latest.canva_status === "Lỗi" && !jdError);
+  // Giai đoạn 4: email ứng tuyển — chỉ soạn khi CV đã duyệt (FR-15/FR-16).
+  const hasApprovedCv = Boolean(latest && latest.status === "Đã duyệt");
+  const existingDraft = (sheet?.applications ?? []).find((a) => a.job_id === job.job_id) ?? null;
 
   return (
     <div>
@@ -167,6 +170,23 @@ export default async function JobDetail({ params }: { params: { id: string } }) 
             </ul>
             <p><a href="/cv">Mở trang CV để duyệt</a></p>
           </div>
+        )}
+      </div>
+      <div className="card">
+        <h2>Email ứng tuyển (Giai đoạn 4)</h2>
+        {isSample ? (
+          <p className="muted">Chưa có dữ liệu thật nên chưa soạn được email.</p>
+        ) : (
+          <EmailDraftSection
+            jobId={job.job_id}
+            hasApprovedCv={hasApprovedCv}
+            existingDraft={existingDraft && existingDraft.email_body ? {
+              email_to: existingDraft.email_to,
+              email_subject: existingDraft.email_subject,
+              email_body: existingDraft.email_body,
+              draft_status: existingDraft.draft_status,
+            } : null}
+          />
         )}
       </div>
       <div className="card">
