@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { loadSheetData } from "@/lib/sheets";
-import { SAMPLE_JOBS, SAMPLE_SOURCES, SAMPLE_PROFILE_NOTE } from "@/data/sample-jobs";
+import { SAMPLE_JOBS, SAMPLE_PROFILE_NOTE } from "@/data/sample-jobs";
 import { matchThreshold } from "@/lib/profile";
 import type { Job } from "@/lib/types";
 
@@ -75,7 +75,6 @@ export default async function Home({
   const sheet = await loadSheetData().catch(() => null);
   const isSample = !sheet;
   const jobs = (sheet?.jobs ?? SAMPLE_JOBS).slice();
-  const sources = sheet?.sources ?? SAMPLE_SOURCES;
   const lastSync = sheet?.lastSyncAt ?? null;
 
   const q = (searchParams.q || "").toLowerCase();
@@ -95,6 +94,20 @@ export default async function Home({
   const selected: Job | null =
     filtered.find((j) => j.job_id === searchParams.job) ?? filtered[0] ?? null;
   const baseParams = { q: searchParams.q, matched: searchParams.matched, source: sourceFilter || undefined };
+
+  // Lọc theo page: tab Sources hiện trống (0 dòng) nên không dùng được làm
+  // danh sách page — suy ra các page trực tiếp từ job thật (source_id/name
+  // trên từng dòng Jobs), kèm số lượng job mỗi page, xếp theo số lượng giảm dần.
+  const pages = (() => {
+    const map = new Map<string, { id: string; name: string; count: number }>();
+    for (const j of jobs) {
+      const id = j.source_id || "unknown";
+      const entry = map.get(id) ?? { id, name: j.source_name || id, count: 0 };
+      entry.count++;
+      map.set(id, entry);
+    }
+    return [...map.values()].sort((a, b) => b.count - a.count);
+  })();
 
   return (
     <div className="home-grid">
@@ -150,17 +163,29 @@ export default async function Home({
 
         <form method="get" className="filter-row">
           <input name="q" placeholder="Tìm theo từ khoá, công ty, skill…" defaultValue={searchParams.q || ""} />
-          <select name="source" defaultValue={sourceFilter}>
-            <option value="">Mọi nguồn</option>
-            {sources.map((s) => (
-              <option key={s.source_id} value={s.source_id}>{s.name}</option>
-            ))}
-          </select>
           <label className="filter-check">
             <input type="checkbox" name="matched" value="1" defaultChecked={onlyMatched} /> Chỉ job đạt ngưỡng
           </label>
           <button type="submit" className="btn-primary">Lọc</button>
         </form>
+
+        <div className="page-chips" role="group" aria-label="Lọc post theo page">
+          <Link
+            href={withParams(baseParams, { source: undefined })}
+            className={`page-chip${!sourceFilter ? " active" : ""}`}
+          >
+            Tất cả ({jobs.length})
+          </Link>
+          {pages.map((p) => (
+            <Link
+              key={p.id}
+              href={withParams(baseParams, { source: p.id })}
+              className={`page-chip${sourceFilter === p.id ? " active" : ""}`}
+            >
+              {p.name} ({p.count})
+            </Link>
+          ))}
+        </div>
 
         {filtered.length === 0 && <p>Không có job nào khớp bộ lọc.</p>}
         {filtered.map((j, i) => {
