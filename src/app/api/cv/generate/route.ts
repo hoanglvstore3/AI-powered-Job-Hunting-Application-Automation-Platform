@@ -76,6 +76,13 @@ export async function POST(req: Request) {
         analysis.missingSkills.length > 0
           ? `Skill thiếu (chưa có, không chèn vào CV): ${analysis.missingSkills.join(", ")}`
           : "",
+      // Luồng Canva mới (23/11/2026): worker chạy mỗi 2 phút sẽ duplicate
+      // template Canva "Lê Việt Hoàng CV 1", đổi tên theo file_name, tuỳ biến
+      // About Me + thứ tự skill theo phân tích, rồi ghi link Canva vào dòng này.
+      canva_url: "",
+      canva_design_id: "",
+      canva_pdf_url: "",
+      canva_status: "Chờ xử lý",
     };
     await appendCVVersion(record);
     const jobStatusUpdated = await updateJobStatus(jobId, "CV Pending Review").catch(() => false);
@@ -87,6 +94,7 @@ export async function POST(req: Request) {
       file_name: fileName,
       docx_url: docxFile.webViewLink,
       pdf_url: pdfFile.webViewLink,
+      canva_status: "Chờ xử lý",
       jobStatusUpdated,
       analysis: {
         matchedSkills: analysis.matchedSkills,

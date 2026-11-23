@@ -76,6 +76,11 @@ export interface CVVersion {
   created_at: string;
   approved_at: string;
   notes: string;
+  /** Bản Canva: link mở design, id design, PDF xuất từ Canva, trạng thái xử lý. */
+  canva_url: string;
+  canva_design_id: string;
+  canva_pdf_url: string;
+  canva_status: "Chưa tạo" | "Chờ xử lý" | "Hoàn thành" | "Lỗi";
 }
 
 export interface Application {

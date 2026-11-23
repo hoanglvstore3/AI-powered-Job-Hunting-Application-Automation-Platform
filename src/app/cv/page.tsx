@@ -73,6 +73,23 @@ export default async function CVPage() {
               <a href={v.docx_url} target="_blank" rel="noreferrer">Tải DOCX (bản chỉnh sửa)</a>
               {" · "}
               <a href={v.pdf_url} target="_blank" rel="noreferrer">Tải PDF (đính kèm email)</a>
+              {v.canva_url ? (
+                <>
+                  {" · "}
+                  <a href={v.canva_url} target="_blank" rel="noreferrer">Mở bản Canva (đã tuỳ biến)</a>
+                </>
+              ) : v.canva_status === "Chờ xử lý" ? (
+                <>
+                  {" · "}
+                  <span className="muted">Đang chuẩn bị bản Canva…</span>
+                </>
+              ) : null}
+              {v.canva_pdf_url ? (
+                <>
+                  {" · "}
+                  <a href={v.canva_pdf_url} target="_blank" rel="noreferrer">Tải PDF Canva</a>
+                </>
+              ) : null}
             </p>
             {v.qa_note && (
               <p><strong>Đánh giá QA (@h1h6qabot):</strong> {v.qa_note}</p>
