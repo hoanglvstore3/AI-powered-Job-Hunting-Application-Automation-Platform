@@ -33,13 +33,33 @@ export default async function Home({
 
   return (
     <div>
-      <h1>Việc làm đã lọc</h1>
-      <p className="muted">{SAMPLE_PROFILE_NOTE}</p>
+      <h1>
+        Việc làm <span className="gradient-text">đã lọc</span>
+      </h1>
+      <p className="hero-sub">{SAMPLE_PROFILE_NOTE}</p>
       <p className="muted">
         Ngưỡng matching: {matchThreshold()}/100 (chưa chốt trong doc — xem PLAN.md B3) ·{" "}
-        {jobs.length} job · {matchedCount} job đạt ngưỡng ·{" "}
         {lastSync ? `Cập nhật gần nhất: ${new Date(lastSync).toLocaleString("vi-VN")}` : "Chưa có Sheet thật"}
       </p>
+
+      <div className="stat-grid">
+        <div className="stat" style={{ animationDelay: "60ms" }}>
+          <div className="stat-num">{jobs.length}</div>
+          <div className="stat-label">Job mới</div>
+        </div>
+        <div className="stat" style={{ animationDelay: "120ms" }}>
+          <div className="stat-num">{matchedCount}</div>
+          <div className="stat-label">Job đạt ngưỡng</div>
+        </div>
+        <div className="stat" style={{ animationDelay: "180ms" }}>
+          <div className="stat-num">0</div>
+          <div className="stat-label">CV đã tạo · Giai đoạn 3</div>
+        </div>
+        <div className="stat" style={{ animationDelay: "240ms" }}>
+          <div className="stat-num">0</div>
+          <div className="stat-label">Draft đã tạo · Giai đoạn 4</div>
+        </div>
+      </div>
 
       {isSample && (
         <div className="warn">
@@ -49,39 +69,37 @@ export default async function Home({
         </div>
       )}
 
-      <form method="get" style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
-        <input name="q" placeholder="Tìm theo từ khoá, công ty, skill…" defaultValue={searchParams.q || ""} />
+      <form method="get" className="filter-bar">
+        <input name="q" placeholder="Tìm theo từ khoá, công ty, skill…" defaultValue={searchParams.q || ""} style={{ flex: "1 1 220px" }} />
         <select name="source" defaultValue={sourceFilter}>
           <option value="">Mọi nguồn</option>
           {sources.map((s) => (
             <option key={s.source_id} value={s.source_id}>{s.name}</option>
           ))}
         </select>
-        <label style={{ display: "flex", alignItems: "center", gap: 4 }}>
+        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 14, fontWeight: 600 }}>
           <input type="checkbox" name="matched" value="1" defaultChecked={onlyMatched} /> Chỉ job đạt ngưỡng
         </label>
-        <button type="submit">Lọc</button>
+        <button type="submit" className="btn-primary">Lọc</button>
       </form>
 
       {filtered.length === 0 && <p>Không có job nào khớp bộ lọc.</p>}
-      {filtered.map((j) => (
-        <div className="card" key={j.job_id}>
-          <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-            <Link href={`/jobs/${encodeURIComponent(j.job_id)}`}><strong>{j.job_title}</strong></Link>
+      {filtered.map((j, i) => (
+        <div className="card" key={j.job_id} style={{ animationDelay: `${Math.min(i, 8) * 60}ms` }}>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start" }}>
+            <Link href={`/jobs/${encodeURIComponent(j.job_id)}`} className="job-title">{j.job_title}</Link>
             <span className={`badge ${j.is_matched ? "matched" : "notmatched"}`}>
               {j.match_score}/100 · {j.is_matched ? "Đạt ngưỡng" : "Chưa đạt"}
             </span>
+          </div>
+          <div className="scorebar" aria-hidden="true">
+            <div className="scorebar-fill" style={{ width: `${Math.max(0, Math.min(100, j.match_score))}%` }} />
           </div>
           <p className="muted">{j.company} · {j.role} · {j.level || "Chưa rõ"} · {j.location || "Chưa rõ"} · {j.work_mode || "Chưa rõ"}</p>
           <p className="muted">Skill yêu cầu: {j.skills_required.join(", ") || "Chưa rõ"} · Nguồn: {j.source_name}</p>
           <p className="muted">{j.match_reason}</p>
         </div>
       ))}
-
-      <h2>Thống kê (FR-19)</h2>
-      <p className="muted">
-        Job mới: {jobs.length} · Job matched: {matchedCount} · CV đã tạo: 0 (Giai đoạn 3) · Draft đã tạo: 0 (Giai đoạn 4)
-      </p>
     </div>
   );
 }

@@ -13,7 +13,7 @@ export default async function JobDetail({ params }: { params: { id: string } }) 
 
   return (
     <div>
-      <p><Link href="/">← Danh sách job</Link></p>
+      <p><Link href="/" className="back-link">← Danh sách job</Link></p>
       <h1>{job.job_title}</h1>
       <p className="muted">{job.company} · {job.role} · {job.level || "Chưa rõ"} · {job.location || "Chưa rõ"} · {job.work_mode || "Chưa rõ"}</p>
       <p>
@@ -21,11 +21,24 @@ export default async function JobDetail({ params }: { params: { id: string } }) 
           Matching {job.match_score}/100 · {job.is_matched ? "Đạt ngưỡng" : "Chưa đạt"}
         </span>
       </p>
+      <div className="scorebar" aria-hidden="true">
+        <div className="scorebar-fill" style={{ width: `${Math.max(0, Math.min(100, job.match_score))}%` }} />
+      </div>
       <div className="card">
         <h2>Giải thích điểm matching (FR-05)</h2>
         <p>{job.match_reason}</p>
-        <p>Skill khớp: {job.matched_skills.join(", ") || "—"}</p>
-        <p>Skill thiếu: {job.missing_skills.join(", ") || "—"}</p>
+        <p>Skill khớp:</p>
+        <div className="chip-row">
+          {job.matched_skills.length > 0
+            ? job.matched_skills.map((s) => (<span key={s} className="chip ok">✓ {s}</span>))
+            : <span className="muted">—</span>}
+        </div>
+        <p>Skill thiếu:</p>
+        <div className="chip-row">
+          {job.missing_skills.length > 0
+            ? job.missing_skills.map((s) => (<span key={s} className="chip miss">{s}</span>))
+            : <span className="muted">—</span>}
+        </div>
       </div>
       <div className="card">
         <h2>Thông tin trích xuất (FR-03)</h2>

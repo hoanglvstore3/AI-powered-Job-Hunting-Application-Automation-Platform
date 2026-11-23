@@ -12,28 +12,34 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang="vi">
       <body>
-        <header>
-          <Link href="/"><strong>Job Hunting</strong></Link>
+        <header className="site-header">
+          <Link href="/" className="brand">
+            <span className="brand-mark">✦</span>
+            Job Hunting
+          </Link>
           <nav>
-            <Link href="/">Việc làm</Link>
-            <Link href="/cv">CV tuỳ biến</Link>
-            <Link href="/ung-tuyen">Ứng tuyển / Draft</Link>
-            <Link href="/cai-dat">Cài đặt</Link>
+            <Link href="/" className="nav-link">Việc làm</Link>
+            <Link href="/cv" className="nav-link">CV tuỳ biến</Link>
+            <Link href="/ung-tuyen" className="nav-link">Ứng tuyển / Draft</Link>
+            <Link href="/cai-dat" className="nav-link">Cài đặt</Link>
           </nav>
-          <span style={{ marginLeft: "auto", fontSize: 14 }}>
+          <span className="header-user">
             {username ? (
               <>
                 {username} ·{" "}
                 <form action="/api/auth/logout" method="post" style={{ display: "inline" }}>
-                  <button type="submit">Đăng xuất</button>
+                  <button type="submit" className="btn-ghost">Đăng xuất</button>
                 </form>
               </>
             ) : (
-              <a href="/dang-nhap">Đăng nhập</a>
+              <a href="/dang-nhap" className="nav-link">Đăng nhập</a>
             )}
           </span>
         </header>
         <main>{children}</main>
+        <footer className="site-footer">
+          Job Hunting · Lê Việt Hoàng — Backend Developer · Đà Nẵng
+        </footer>
       </body>
     </html>
   );

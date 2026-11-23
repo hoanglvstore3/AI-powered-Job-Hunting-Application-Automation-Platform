@@ -32,46 +32,48 @@ export default function LoginPage() {
   }
 
   return (
-    <div>
-      <h1>Đăng nhập</h1>
-      <p className="muted">
-        Website cá nhân của Lê Việt Hoàng — đăng nhập bằng tài khoản demo do chủ
-        sở hữu cấp. Không có trang đăng ký công khai.
-      </p>
-      <form onSubmit={onSubmit} style={{ maxWidth: 320 }}>
-        <p>
-          <label>
-            Tài khoản
-            <br />
-            <input
-              type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              autoComplete="username"
-              required
-            />
-          </label>
+    <div className="login-wrap">
+      <div className="login-card">
+        <h1>
+          <span className="gradient-text">Đăng nhập</span>
+        </h1>
+        <p className="muted">
+          Website cá nhân của Lê Việt Hoàng — đăng nhập bằng tài khoản demo do chủ
+          sở hữu cấp. Không có trang đăng ký công khai.
         </p>
-        <p>
-          <label>
-            Mật khẩu
-            <br />
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete="current-password"
-              required
-            />
-          </label>
-        </p>
-        {error && <p style={{ color: "red" }}>{error}</p>}
-        <p>
-          <button type="submit" disabled={busy}>
-            {busy ? "Đang đăng nhập…" : "Đăng nhập"}
-          </button>
-        </p>
-      </form>
+        <form onSubmit={onSubmit}>
+          <p>
+            <label>
+              Tài khoản
+              <input
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                autoComplete="username"
+                required
+              />
+            </label>
+          </p>
+          <p>
+            <label>
+              Mật khẩu
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete="current-password"
+                required
+              />
+            </label>
+          </p>
+          {error && <p className="error">{error}</p>}
+          <p>
+            <button type="submit" className="btn-primary" disabled={busy}>
+              {busy ? "Đang đăng nhập…" : "Đăng nhập"}
+            </button>
+          </p>
+        </form>
+      </div>
     </div>
   );
 }
