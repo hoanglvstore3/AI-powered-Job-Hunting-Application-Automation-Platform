@@ -35,7 +35,7 @@ export default function LoginPage() {
     <div className="login-wrap">
       <div className="login-card">
         <h1>
-          <span className="gradient-text">Đăng nhập</span>
+          Đăng nhập
         </h1>
         <p className="muted">
           Website cá nhân của Lê Việt Hoàng — đăng nhập bằng tài khoản demo do chủ

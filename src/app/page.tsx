@@ -34,7 +34,7 @@ export default async function Home({
   return (
     <div>
       <h1>
-        Việc làm <span className="gradient-text">đã lọc</span>
+        Việc làm đã lọc
       </h1>
       <p className="hero-sub">{SAMPLE_PROFILE_NOTE}</p>
       <p className="muted">
