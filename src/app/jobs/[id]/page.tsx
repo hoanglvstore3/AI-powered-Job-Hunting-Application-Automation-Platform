@@ -15,6 +15,17 @@ export default async function JobDetail({ params }: { params: { id: string } }) 
   const isSample = !sheet;
   const analysis = analyzeCV(job);
   const versions = (sheet?.cvVersions ?? []).filter((v) => v.job_id === job.job_id);
+  // Trạng thái tuỳ biến lại CV theo JD — để Shu thấy rõ KHI NÀO và CẬP NHẬT GÌ.
+  const latest = versions.length > 0 ? [...versions].sort((a, b) => b.version - a.version)[0] : null;
+  // Giờ lưu JD gần nhất (từ marker [JD mới HH:MM dd-MM] trong notes).
+  const jdTime = (() => {
+    if (!latest) return "";
+    const m = [...latest.notes.matchAll(/\[JD mới ([0-9:]+ [0-9-]+)\]/g)];
+    return m.length > 0 ? m[m.length - 1][1] : "";
+  })();
+  const jdPending = Boolean(latest && latest.canva_status === "Chờ sửa" && latest.notes.includes("[JD mới"));
+  const jdDone = Boolean(latest && latest.canva_status === "Hoàn thành" && latest.changes.includes("JD mới"));
+  const jdError = Boolean(latest && latest.canva_status === "Lỗi" && latest.notes.includes("[JD mới"));
 
   return (
     <div>
@@ -78,6 +89,36 @@ export default async function JobDetail({ params }: { params: { id: string } }) 
         ) : (
           <JobDescriptionForm jobId={job.job_id} currentJd={job.jd_text || ""} />
         )}
+        {!isSample && job.jd_text && (
+          <div>
+            {jdPending && (
+              <p className="ok-text">
+                JD đã lưu{jdTime ? ` lúc ${jdTime}` : ""}. CV v{latest!.version} đang được tuỳ biến lại theo JD — DevBot kiểm tra và cập nhật trong ~2 phút, xong sẽ hiện ở mục “Đã thay đổi” bên dưới.
+              </p>
+            )}
+            {jdDone && (
+              <p className="ok-text">
+                JD đã lưu{jdTime ? ` lúc ${jdTime}` : ""}. CV v{latest!.version} đã tuỳ biến lại theo JD xong — xem mục “Đã thay đổi” ở card CV tuỳ biến bên dưới.
+              </p>
+            )}
+            {jdError && (
+              <p className="error-text">
+                Tuỳ biến lại theo JD bị lỗi — xem lý do ở mục CV tuỳ biến bên dưới, rồi lưu lại JD để thử lại.
+              </p>
+            )}
+            {latest && latest.canva_status === "Chờ xử lý" && (
+              <p className="muted">JD đã lưu. CV v{latest.version} đang được chuẩn bị — bản Canva sẽ dùng JD này.</p>
+            )}
+            {!latest && (
+              <p className="muted">JD đã lưu. Chưa có CV cho job này — khi bấm “Tạo CV tuỳ biến”, bản Canva sẽ dùng JD này.</p>
+            )}
+            {latest && latest.canva_status === "Hoàn thành" && !jdDone && !jdPending && !jdError && (
+              <p className="muted">
+                JD đã lưu{jdTime ? ` lúc ${jdTime}` : ""}. CV v{latest.version} chưa tuỳ biến lại theo JD này (đang chờ xử lý khác) — lưu lại JD sau khi bản Canva xử lý xong để kích hoạt.
+              </p>
+            )}
+          </div>
+        )}
       </div>
       <div className="card">
         <h2>CV tuỳ biến (FR-13 / FR-14)</h2>
@@ -93,11 +134,20 @@ export default async function JobDetail({ params }: { params: { id: string } }) 
               {versions.map((v) => (
                 <li key={v.cv_id}>
                   v{v.version} — {v.file_name} · {v.status}
-                  {v.canva_status === "Chờ sửa" || v.canva_status === "Đang sửa" ? ` · Canva: ${v.canva_status}` : ""}
+                  {v.canva_status && v.canva_status !== "Chưa tạo" ? ` · Canva: ${v.canva_status}` : ""}
                   {" · "}
                   <a href={v.docx_url} target="_blank" rel="noreferrer">DOCX</a>
                   {" · "}
                   <a href={v.pdf_url} target="_blank" rel="noreferrer">PDF</a>
+                  {v.canva_url && (
+                    <>
+                      {" · "}
+                      <a href={v.canva_url} target="_blank" rel="noreferrer">Canva</a>
+                    </>
+                  )}
+                  {v.changes && (
+                    <p className="muted">Đã thay đổi so với CV gốc: {v.changes}</p>
+                  )}
                 </li>
               ))}
             </ul>

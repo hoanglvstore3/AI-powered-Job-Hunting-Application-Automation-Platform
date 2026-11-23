@@ -32,6 +32,18 @@ const CANVA_BIN = "/opt/hatch/bin/canva";
 const TEMPLATE_DESIGN_ID = "DAGfDv-fDpM";
 const USER_INTENT = "Duplicate the owners CV template and tailor it for a job (Canva CV worker).";
 
+/** Giờ hiện tại theo Asia/Bangkok, dạng "HH:MM dd/MM" — ghi vào cột changes
+    để Shu thấy rõ lần cập nhật theo JD diễn ra khi nào. */
+function bangkokStamp(d = new Date()): string {
+  return new Intl.DateTimeFormat("vi-VN", {
+    timeZone: "Asia/Bangkok",
+    hour: "2-digit",
+    minute: "2-digit",
+    day: "2-digit",
+    month: "2-digit",
+  }).format(d);
+}
+
 /** Gọi Canva CLI, trả về object JSON trong content[0].text (hoặc structuredContent). */
 function canva<T>(tool: string, args: Record<string, unknown>): T {
   const dir = mkdtempSync(join(tmpdir(), "canva-worker-"));
@@ -295,6 +307,7 @@ async function retaylorOne(cv: {
 
   const changeParts: string[] = [];
   const ops: Record<string, unknown>[] = [];
+  const stamp = bangkokStamp();
   // 1. Câu strengths: thay bằng câu mới (tính từ phân tích đã gộp JD).
   // Giữ lại từ khoá do Shu thêm tay (không phải skill, VD: FSOFT, Đà Nẵng)
   // để tuỳ biến lại không làm mất sửa tay của Shu.
@@ -324,8 +337,8 @@ async function retaylorOne(cv: {
     });
     changeParts.push(
       newSentence
-        ? `JD mới: cập nhật câu strengths (${allListed.join(", ")})`
-        : "JD mới: xoá câu strengths (không còn skill khớp)",
+        ? `JD mới ${stamp}: cập nhật câu strengths (${allListed.join(", ")})`
+        : `JD mới ${stamp}: xoá câu strengths (không còn skill khớp)`,
     );
   }
   // 2. Sắp xếp lại dòng Programming Languages theo skill khớp mới.
@@ -339,7 +352,7 @@ async function retaylorOne(cv: {
       find_text: originalLine,
       replace_text: reordered.line,
     });
-    changeParts.push(`JD mới: Programming Languages: ${reordered.front.join(", ")} lên đầu`);
+    changeParts.push(`JD mới ${stamp}: Programming Languages: ${reordered.front.join(", ")} lên đầu`);
   }
   if (ops.length === 0) {
     // JD không làm thay đổi gì (skill khớp như cũ) — không cần sửa Canva,
@@ -347,7 +360,7 @@ async function retaylorOne(cv: {
     await canva("edit-design", { transaction_id: txId, finalize: "cancel", user_intent: USER_INTENT });
     await updateCVVersion(cv.cv_id, {
       canva_status: "Hoàn thành",
-      changes: `${cv.changes ? `${cv.changes}; ` : ""}JD mới: không thay đổi (skill khớp như cũ)`,
+      changes: `${cv.changes ? `${cv.changes}; ` : ""}JD mới ${stamp}: không thay đổi (skill khớp như cũ)`,
     });
     console.log(`[${cv.cv_id}] JD không đổi gì, đã về Hoàn thành.`);
     return;
