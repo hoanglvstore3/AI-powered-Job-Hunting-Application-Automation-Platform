@@ -2,8 +2,23 @@
 // được trên Vercel serverless — không cần Chromium). Nội dung giống hệt bản
 // DOCX: dữ kiện thật trong CV gốc + phân tích FR-12, không bịa thêm.
 import PDFDocument from "pdfkit";
+// @ts-ignore — @types/pdfkit chưa khai báo registerStdFonts (pdfkit 0.21)
+import { registerStdFonts } from "pdfkit";
+import Helvetica from "pdfkit/standard-fonts/Helvetica";
+import HelveticaBold from "pdfkit/standard-fonts/HelveticaBold";
+import HelveticaOblique from "pdfkit/standard-fonts/HelveticaOblique";
 import { BASE_CV, type CVAnalysis } from "./cv";
 import type { Job } from "./types";
+
+// Đăng ký 3 font chuẩn pdfkit dùng trong CV — BẮT BUỘC trước khi new PDFDocument.
+// Lý do: trên Vercel, pdfkit bị bundle nên không tự load được file
+// ./standard-fonts/*.cjs (require động, file tracer không thấy), khiến mọi lần
+// tạo PDF đều lỗi "Cannot load the standard font Helvetica" (gặp 19:12
+// ngày 23/11/2026 khi Shu bấm Tạo CV cho job FPT). Import tĩnh thế này thì
+// bundler sẽ đóng gói font vào function, và registerStdFonts bảo pdfkit dùng
+// font đã đăng ký thay vì tự load. Local dev không lỗi vì chạy trực tiếp từ
+// node_modules, nên lỗi này chỉ lộ trên Vercel.
+registerStdFonts(Helvetica, HelveticaBold, HelveticaOblique);
 
 /** Trả về Buffer của file .pdf cho bản CV tuỳ biến của một job. */
 export function buildCvPdf(job: Job, analysis: CVAnalysis): Promise<Buffer> {
