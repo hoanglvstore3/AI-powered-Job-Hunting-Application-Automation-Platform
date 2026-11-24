@@ -924,7 +924,65 @@ tbody tr:hover { background: #f8fafc; }
 .page-chip:hover { border-color: var(--accent); color: var(--accent); text-decoration: none; }
 .page-chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
 
-/* ---------- Giai đoạn 3: CV tuỳ biến (FR-12/13/14/20) ---------- */
+/* ---------- Responsive mobile (Shu giao 17:34 ngày 24/11/2026) ----------
+   Rà hết các trang: bảng tràn, từ dài không ngắt, topbar chật, hero to,
+   input <16px bị iOS tự zoom khi focus. Chỉ thêm/sửa ở đây, không đụng
+   bố cục desktop đã chốt. */
+.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.table-wrap table { min-width: 480px; }
+textarea {
+  padding: 9px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: var(--radius-sm);
+  font: inherit;
+  font-size: 14.5px;
+  background: #fff;
+  color: var(--text);
+  outline: none;
+  resize: vertical;
+}
+textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.14);
+}
+.card, .detail-card { overflow-wrap: anywhere; }
+/* Flex con trong card: min-width:0 để text dài (tên file CV, tên job) được
+   phép ngắt thay vì đẩy card tràn màn hình (flex item mặc định min-width:auto). */
+.cv-version-head > div { min-width: 0; }
+.detail-head > div { min-width: 0; }
+.notif-body > * { min-width: 0; overflow-wrap: anywhere; }
+
+@media (max-width: 640px) {
+  /* Chống iOS Safari tự zoom khi focus input (ngưỡng 16px). */
+  input, select, textarea { font-size: 16px; }
+  .card { padding: 16px; }
+  .dash-main { padding: 16px 12px; }
+  .dash-topbar { flex-wrap: wrap; gap: 10px; }
+  .top-search { min-width: 0; flex: 1 1 100%; order: 3; }
+  .top-search input { font-size: 16px; }
+  .hero { padding: 20px 16px; }
+  .hero h1 { font-size: 21px; }
+  .hero-text p { font-size: 14px; }
+  .section-head h2 { font-size: 17px; }
+  .job-card { padding: 14px; }
+  .filter-row input[name="q"] { flex-basis: 100%; }
+  .side-nav-link { padding: 8px 10px; font-size: 13.5px; }
+  .notif-item { flex-wrap: wrap; }
+  .notif-item .notif-time { white-space: normal; }
+  .btn-row .btn-primary, .btn-row .btn-outline, .btn-row .btn-danger { flex: 1 1 auto; }
+  .login-card { padding: 24px 20px; }
+  table td, table th { padding: 9px 6px; font-size: 13.5px; }
+  .stat-grid { gap: 8px; }
+  .stat-num { font-size: 22px; }
+}
+
+@media (max-width: 480px) {
+  .hero-cta { width: 100%; justify-content: center; }
+  .job-actions { width: 100%; }
+  .job-actions .btn-detail { flex: 1; text-align: center; }
+  .dash-sidebar { padding: 10px 12px; gap: 8px; }
+  .dash-topbar { padding: 10px 12px; }
+}
 .cv-version-card { margin-bottom: 16px; }
 .cv-version-head { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; align-items: flex-start; }
 .pill { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 12.5px; font-weight: 650; }

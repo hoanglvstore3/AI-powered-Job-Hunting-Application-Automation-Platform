@@ -28,6 +28,7 @@ export default async function SettingsPage() {
       </div>
       <div className="card">
         <h2>Nguồn theo dõi (FR-18, §4)</h2>
+        <div className="table-wrap">
         <table>
           <thead><tr><th>Nguồn</th><th>Loại</th><th>Đã xác minh</th><th>Trạng thái</th></tr></thead>
           <tbody>
@@ -41,6 +42,7 @@ export default async function SettingsPage() {
             ))}
           </tbody>
         </table>
+        </div>
         <p className="muted">
           Cả 4 nguồn đều là link chia sẻ Group, chưa xác minh tên/ID (Giai đoạn 0).
           Thêm/bớt nguồn bằng cách sửa tab Sources trên Sheet — không cần sửa code (§4).

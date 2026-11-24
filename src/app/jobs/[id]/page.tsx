@@ -191,6 +191,7 @@ export default async function JobDetail({ params }: { params: { id: string } }) 
       </div>
       <div className="card">
         <h2>Thông tin trích xuất (FR-03)</h2>
+        <div className="table-wrap">
         <table><tbody>
           <tr><td>Công ty</td><td>{job.company || "Chưa rõ"}</td></tr>
           <tr><td>Lương</td><td>{job.salary_text || "Chưa rõ"}</td></tr>
@@ -200,6 +201,7 @@ export default async function JobDetail({ params }: { params: { id: string } }) 
           <tr><td>Cách ứng tuyển</td><td>{job.apply_method || "Chưa rõ"}</td></tr>
           <tr><td>Trạng thái</td><td>{isSample ? job.status : <JobStatusChanger jobId={job.job_id} current={job.status} />}</td></tr>
         </tbody></table>
+        </div>
       </div>
       <div className="card">
         <h2>Toàn văn bài đăng</h2>
