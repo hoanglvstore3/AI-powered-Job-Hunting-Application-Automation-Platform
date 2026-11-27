@@ -24,6 +24,7 @@ export const PROFILE = {
     "JS": "JavaScript",
     "Spring": "Spring Boot",
     "Nest": "NestJS",
+    "Nest.js": "NestJS",
     "Postgres": "PostgreSQL",
     "Rest API": "RESTful API",
     "REST API": "RESTful API",

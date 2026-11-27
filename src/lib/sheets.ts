@@ -78,7 +78,11 @@ function rowsToJobs(rows: string[][]): Job[] {
   const header = rows[0];
   return rows.slice(1).map((r) => {
     const get = (name: string) => r[header.indexOf(name)] ?? "";
-    const list = (v: string) => v.split(",").map((s) => s.trim()).filter(Boolean);
+    const list = (v: string) =>
+      v
+        .split(/[,;]/)
+        .map((s) => s.trim().replace(/\s*\([^)]*\)\s*$/, "").trim())
+        .filter(Boolean);
     return {
       job_id: get("job_id"),
       source_id: get("source_id"),
